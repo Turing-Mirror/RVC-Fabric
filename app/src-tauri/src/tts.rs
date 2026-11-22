@@ -40,6 +40,10 @@ use crate::paths;
 static BUSY: Mutex<bool> = Mutex::new(false);
 static CANCEL: OnceLock<Arc<AtomicBool>> = OnceLock::new();
 
+pub fn is_busy() -> bool {
+    *BUSY.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 struct BusyOff;
 impl Drop for BusyOff {
     fn drop(&mut self) {
@@ -309,6 +313,7 @@ pub fn run_with_model(
     model_path: &str,
 ) -> Result<Value, String> {
     {
+        let _update_admission = crate::update::task_start_guard()?;
         let mut g = BUSY.lock().unwrap_or_else(|e| e.into_inner());
         if *g {
             return Err(crate::i18n::t("s.47baa6fbb7").into());

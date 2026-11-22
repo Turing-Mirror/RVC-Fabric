@@ -19,7 +19,7 @@ const tauri = vi.hoisted(() => ({
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: tauri.invoke }));
 
-import { useUpdateFlow, type UpdateInfo } from "./updateFlow";
+import { useUpdateFlow, type UpdateChannelStatus, type UpdateInfo } from "./updateFlow";
 
 const offer = (over: Partial<UpdateInfo> = {}): UpdateInfo => ({
   local: "1.6.0",
@@ -142,6 +142,7 @@ describe("useUpdateFlow", () => {
       await flow().accept();
     });
     expect(tauri.calls).toEqual(["update_check", "update_app"]);
+    expect(tauri.invoke).toHaveBeenCalledWith("update_app", { version: "1.7.0" });
     unmount();
   });
 
@@ -344,6 +345,135 @@ describe("useUpdateFlow", () => {
     act(() => flow().dismiss());
     expect(flow().offer).toBeNull();
     expect(flow().result).toBeNull();
+    unmount();
+  });
+
+  it("选择 Beta 只检查目标，明确确认后才安装该通道和版本", async () => {
+    mockInvoke((cmd) => cmd === "update_channel_status"
+      ? { channel: "stable", version: "1.8.1", beta_available: true }
+      : cmd === "update_check"
+        ? offer({ local: "1.8.1", remote: "1.8.2-beta.4", action: "external", channel: "beta", installed_channel: "stable", switching_channel: true })
+        : { installed: true, version: "1.8.2-beta.4" });
+    const { flow, unmount } = mountFlow();
+    await act(async () => { await flow().refreshChannelStatus(); });
+    await act(async () => { await flow().selectChannel("beta"); });
+    expect(tauri.calls).toEqual(["update_channel_status", "update_check"]);
+    expect(tauri.invoke).toHaveBeenCalledWith("update_check", { channel: "beta" });
+    expect(flow().channelStatus?.channel).toBe("stable");
+    expect(flow().selectedChannel).toBe("beta");
+    expect(flow().offer?.remote).toBe("1.8.2-beta.4");
+    await act(async () => { await flow().accept(); });
+    expect(tauri.invoke).toHaveBeenCalledWith("update_app", { channel: "beta", version: "1.8.2-beta.4" });
+    expect(flow().channelStatus?.channel).toBe("stable");
+    unmount();
+  });
+
+  it("Beta 返回较低正式版：检查与安装均绑定 Stable，失败保留实际 Beta 通道", async () => {
+    mockInvoke((cmd) => {
+      if (cmd === "update_channel_status") return { channel: "beta", version: "1.8.2-beta.4", beta_available: true };
+      if (cmd === "update_check") return offer({ local: "1.8.2-beta.4", remote: "1.8.0", action: "external", channel: "stable", installed_channel: "beta", switching_channel: true, downgrade: true });
+      throw new Error("signature verification failed");
+    });
+    const { flow, unmount } = mountFlow();
+    await act(async () => { await flow().refreshChannelStatus(); });
+    expect(flow().selectedChannel).toBe("beta");
+    await act(async () => { await flow().selectChannel("stable"); });
+    expect(flow().offer?.downgrade).toBe(true);
+    expect(tauri.calls).not.toContain("update_app");
+    await act(async () => { await flow().accept(); });
+    expect(tauri.invoke).toHaveBeenCalledWith("update_app", { channel: "stable", version: "1.8.0" });
+    expect(flow().channelStatus?.channel).toBe("beta");
+    expect(flow().result).toBeNull();
+    expect(flow().busy).toBe(false);
+    expect(flow().error).toContain("signature verification failed");
+    unmount();
+  });
+
+  it("未配置 Beta 时不发送检查，也不把选择当成已切换", async () => {
+    mockInvoke(() => ({ channel: "stable", version: "1.8.1", beta_available: false }));
+    const { flow, unmount } = mountFlow();
+    await act(async () => { await flow().refreshChannelStatus(); });
+    await act(async () => { await flow().selectChannel("beta"); });
+    expect(tauri.calls).toEqual(["update_channel_status"]);
+    expect(flow().selectedChannel).toBe("stable");
+    expect(flow().channelStatus?.channel).toBe("stable");
+    expect(flow().line).toContain("Beta");
+    unmount();
+  });
+
+  it("旧启动检查晚返回时不能覆盖新选 Beta 的目标与提示", async () => {
+    let resolveOld!: (value: UpdateInfo) => void;
+    mockInvoke((cmd, args) => {
+      if (cmd === "update_channel_status") return { channel: "stable", version: "1.8.1", beta_available: true };
+      if (!args) return new Promise<UpdateInfo>((resolve) => { resolveOld = resolve; });
+      return offer({ remote: "1.8.2-beta.4", channel: "beta", installed_channel: "stable", switching_channel: true });
+    });
+    const { flow, unmount } = mountFlow();
+    await act(async () => { await flow().refreshChannelStatus(); });
+    let oldCheck!: Promise<UpdateInfo | null>;
+    act(() => { oldCheck = flow().probe(); });
+    await act(async () => { await flow().selectChannel("beta"); });
+    await act(async () => { resolveOld(offer({ remote: "1.8.1", channel: "stable" })); });
+    expect(await oldCheck).toBeNull();
+    expect(flow().offer?.channel).toBe("beta");
+    expect(flow().checkedTarget?.remote).toBe("1.8.2-beta.4");
+    expect(flow().line).toContain("1.8.2-beta.4");
+    unmount();
+  });
+
+  it("已返回的旧启动结果也不能在选择通道后重新弹出", async () => {
+    mockInvoke((cmd, args) => cmd === "update_channel_status"
+      ? { channel: "stable", version: "1.8.1", beta_available: true }
+      : offer(args ? { channel: "beta", remote: "1.8.2-beta.4", switching_channel: true } : { channel: "stable" }));
+    const { flow, unmount } = mountFlow();
+    await act(async () => { await flow().refreshChannelStatus(); });
+    let old!: UpdateInfo | null;
+    await act(async () => { old = await flow().probe(); });
+    await act(async () => { await flow().selectChannel("beta"); });
+    act(() => { flow().present(old!); });
+    expect(flow().offer?.channel).toBe("beta");
+    unmount();
+  });
+
+  it("Stable→Beta→Stable 后再次进入同一 Beta 不继承上个通道完成标记", async () => {
+    let installed: UpdateChannelStatus = { channel: "stable", version: "1.8.1", beta_available: true };
+    mockInvoke((cmd, args) => {
+      if (cmd === "update_channel_status") return installed;
+      const channel = (args as { channel?: string })?.channel ?? installed.channel;
+      const version = channel === "beta" ? "1.8.2-beta.4" : "1.8.1";
+      if (cmd === "update_check") return offer({ channel: channel as "stable" | "beta", remote: version, local: installed.version, installed_channel: installed.channel, switching_channel: channel !== installed.channel, action: "external" });
+      return { installed: true, version };
+    });
+    const { flow, unmount } = mountFlow();
+    await act(async () => { await flow().refreshChannelStatus(); });
+    await act(async () => { await flow().selectChannel("beta"); });
+    await act(async () => { await flow().accept(); });
+    installed = { ...installed, channel: "beta", version: "1.8.2-beta.4" };
+    await act(async () => { await flow().refreshChannelStatus(); });
+    await act(async () => { await flow().selectChannel("stable"); });
+    await act(async () => { await flow().accept(); });
+    installed = { ...installed, channel: "stable", version: "1.8.1" };
+    await act(async () => { await flow().refreshChannelStatus(); });
+    await act(async () => { await flow().selectChannel("beta"); });
+    expect(flow().offer?.remote).toBe("1.8.2-beta.4");
+    await act(async () => { await flow().accept(); });
+    expect(tauri.calls.filter((cmd) => cmd === "update_app")).toHaveLength(3);
+    unmount();
+  });
+
+  it("切换检查失败不会保留先前可安装的旧提示", async () => {
+    mockInvoke((cmd, args) => {
+      if (cmd === "update_channel_status") return { channel: "stable", version: "1.8.1", beta_available: true };
+      if (args) throw new Error("Beta unavailable");
+      return offer({ channel: "stable" });
+    });
+    const { flow, unmount } = mountFlow();
+    await act(async () => { await flow().refreshChannelStatus(); await flow().check(); });
+    expect(flow().offer).not.toBeNull();
+    await act(async () => { await flow().selectChannel("beta"); });
+    expect(flow().offer).toBeNull();
+    expect(flow().channelStatus?.channel).toBe("stable");
+    expect(flow().line).toContain("Beta unavailable");
     unmount();
   });
 });

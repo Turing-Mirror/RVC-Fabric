@@ -68,6 +68,8 @@ mod train_queue;
 mod tts;
 mod ui_assets;
 pub mod update;
+mod update_channel;
+pub mod update_install;
 mod vcredist;
 mod voices;
 mod wallpaper;
@@ -492,10 +494,18 @@ fn pick_wallpaper(window: tauri::WebviewWindow) -> Option<String> {
 
 /// Ask the catalog whether a newer build exists.
 #[tauri::command]
-async fn update_check() -> Result<Value, String> {
-    tauri::async_runtime::spawn_blocking(|| update::check(12))
-        .await
-        .map_err(|e| e.to_string())?
+async fn update_check(
+    app: AppHandle,
+    state: State<'_, Mutex<AppState>>,
+    channel: Option<String>,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    update::check_channel(&app, &root, channel.as_deref()).await
+}
+
+#[tauri::command]
+fn update_channel_status() -> Value {
+    update_channel::status()
 }
 
 /// Download a gui_patch and swap the external frontend/ directory.
@@ -1002,8 +1012,14 @@ fn close_finish(app: AppHandle, to_tray: bool) {
 
 /// Strategy B: replace the exe through the signed updater feed.
 #[tauri::command]
-async fn update_app(app: AppHandle) -> Result<Value, String> {
-    update::run_app_updater(&app).await
+async fn update_app(
+    app: AppHandle,
+    state: State<'_, Mutex<AppState>>,
+    channel: Option<String>,
+    version: Option<String>,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    update::run_app_updater(&app, &root, channel.as_deref(), version.as_deref()).await
 }
 
 /// 打开一个独立工具窗口（人声分离 / 训练音色 / 语音转换）。
@@ -1035,8 +1051,13 @@ fn shell_version() -> &'static str {
 /// Reported by the UI on first paint. Turns "the window is blank" from an
 /// unfalsifiable user report into a line in `shell.log`.
 #[tauri::command]
-fn ui_ready() {
+fn ui_ready(state: State<'_, Mutex<AppState>>) {
     ui_assets::mark_ui_ready();
+    if let Ok(root) = root_clone(&state) {
+        if let Err(e) = update_channel::confirm_startup(&root) {
+            logging::shell_log!("更新启动确认未完成：{e}");
+        }
+    }
 }
 
 /// Anything the UI's own error screen wants to show, written to `shell.log`.
@@ -2910,6 +2931,7 @@ pub fn run() {
             i18n_get_locale,
             pick_wallpaper,
             update_check,
+            update_channel_status,
             update_apply,
             update_app,
             hotkeys_apply,
@@ -3317,20 +3339,29 @@ pub fn run() {
         .run(|app, event| {
             // 退出时再清一遍，把本会话分离/下载留下的中间文件收掉。
             if let tauri::RunEvent::Exit = event {
-                mobile::shutdown();
-                if let Some(api) = app.try_state::<std::sync::Arc<trm_app_protocol::Service>>() { api.remove_running_record(); }
-                audio_preview::audio_preview_stop();
-                audio_voice::audio_voice_stop();
-                audio_waveform::cancel_all();
-                audio_library::stop_scan_on_exit();
-                audio_library::stop_export_on_exit();
-                if let Ok(g) = app.state::<Mutex<AppState>>().lock() {
-                    sts::release_resident();
-                    worker::kill_known_workers(&g.root);
-                    worker::kill_runtime_pythons(&g.root, false);
-                    let stats = paths::clean_temps(&g.root);
-                    paths::log_clean_stats(&crate::i18n::t("s.feecb1e6ad"), &g.root, &stats);
-                }
+                shutdown_for_update(app);
             }
         });
+}
+
+/// Tauri's Windows updater exits the process directly, bypassing RunEvent::Exit.
+/// Both paths call the same product shutdown before installer files are replaced.
+pub(crate) fn shutdown_for_update(app: &AppHandle) {
+    mobile::shutdown();
+    if let Some(api) = app.try_state::<std::sync::Arc<trm_app_protocol::Service>>() { api.remove_running_record(); }
+    audio_preview::audio_preview_stop();
+    audio_voice::audio_voice_stop();
+    audio_waveform::cancel_all();
+    audio_library::stop_scan_on_exit();
+    audio_library::stop_export_on_exit();
+    if let Some(state) = app.try_state::<Mutex<AppState>>() {
+        let root = state.lock().ok().map(|g| g.root.clone());
+        if let Some(root) = root {
+            sts::release_resident();
+            worker::kill_known_workers(&root);
+            worker::kill_runtime_pythons(&root, false);
+            let stats = paths::clean_temps(&root);
+            paths::log_clean_stats(&crate::i18n::t("s.feecb1e6ad"), &root, &stats);
+        }
+    }
 }

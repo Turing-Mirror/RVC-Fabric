@@ -360,6 +360,10 @@ pub fn is_busy() -> bool {
     RUN.lock().unwrap_or_else(|e| e.into_inner()).busy
 }
 
+pub fn is_recording() -> bool {
+    *REC_BUSY.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 /// 取消并等它真的停下来，最多等 `secs` 秒。返回停没停下来。
 ///
 /// 强杀引擎会顺手清 Runtime 下的 python 进程，如果这时候转换还在跑，就是
@@ -858,6 +862,7 @@ pub fn cancel_record() {
 /// 在输入文件夹录一段 wav。阻塞到用户停止或超时。
 pub fn record(app: &AppHandle, root: &Path, input: &str) -> Result<Value, String> {
     {
+        let _update_admission = crate::update::task_start_guard()?;
         // 认领录音占用的整个判定在 RUN 锁内做（RUN → REC_BUSY 序，与
         // run() 认领同向）：run() 也在 RUN 里查 REC_BUSY，两个方向的
         // 「对方没在占用」检查因此对彼此都是原子的——不存在录音刚起步
@@ -1600,6 +1605,7 @@ pub fn run(
     manifest: Option<Vec<Value>>,
 ) -> Result<Value, String> {
     {
+        let _update_admission = crate::update::task_start_guard()?;
         // 认领在 RUN 一把锁里做完：busy 判定、录音占用互查、记名、
         // 静默/进度/取消旗初始化。认领后才到达的 cancel_for 必然看到
         // 本单 owner（正确取消）；认领前的取消一律错配被吞——不存在

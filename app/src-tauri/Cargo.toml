@@ -33,6 +33,7 @@ tauri-plugin-global-shortcut = "2"
 tauri-plugin-updater = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+semver = "1"
 # Multi-part HTTP range downloader (https://github.com/sam0x17/ripget) — aria2-style
 ripget = "0.3"
 tokio = { version = "1", features = ["rt-multi-thread", "time", "macros", "sync", "net", "io-util", "fs"] }

@@ -201,10 +201,35 @@ def write_env_file() -> None:
     (PAYLOAD / ".env").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def write_program_inventory() -> None:
+    """Record only bundled program files, never downloaded models or user data."""
+    conf = json.loads(TAURI_CONF.read_text(encoding="utf-8"))
+    meta_path = PAYLOAD / "setup_package.json"
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    files = set()
+    for source, target in conf["bundle"]["resources"].items():
+        path = TAURI_CONF.parent / source
+        if path.is_dir():
+            files.update(
+                (Path(target) / child.relative_to(path)).as_posix()
+                for child in path.rglob("*") if child.is_file()
+            )
+        elif path.is_file():
+            files.add(Path(target).as_posix())
+    meta.update(
+        version=conf["version"],
+        channel="beta" if "-beta." in conf["version"] else "stable",
+        data_schema=1,
+        program_files=sorted(files),
+    )
+    meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
 def main() -> int:
     build()
     mark_installer_kind()
     write_env_file()
+    write_program_inventory()
 
     problems = check_forbidden()
     problems = [f"负载里混进了不该有的 {x}" for x in problems]

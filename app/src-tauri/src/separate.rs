@@ -156,6 +156,7 @@ pub fn run_owned(
     owner: Option<String>,
 ) -> Result<Value, String> {
     {
+        let _update_admission = crate::update::task_start_guard()?;
         let mut g = BUSY.lock().unwrap_or_else(|e| e.into_inner());
         if *g {
             return Err(crate::i18n::t("s.38d4c44c83").into());

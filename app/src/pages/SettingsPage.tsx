@@ -9,6 +9,7 @@ import { Field, Select, Slider, Toggle } from "../components/controls";
 import { MicTest } from "../components/MicTest";
 import { AudioRecoverySettings } from "../components/AudioRecovery";
 import { AudioHotkeyEditor } from "../components/AudioHotkeyEditor";
+import { UpdateChannelPanel, type UpdateChannelPanelProps } from "../components/UpdateChannelPanel";
 import { useConfig } from "../hooks/useConfig";
 import { setConfig, tips } from "../lib/config";
 import { assessDevices } from "../lib/deviceSetup";
@@ -43,6 +44,7 @@ type Props = {
   onCheckUpdate?: () => void;
   updateLine?: string;
   updateBusy?: boolean;
+  updateChannels?: UpdateChannelPanelProps;
   /** 跳到说明页。设备这一套（虚拟声卡连接方式）的解释全在那边，
    *  这里只放一个入口，不把同一段话再抄一遍。 */
   onOpenHelp?: (section?: string) => void;
@@ -118,6 +120,7 @@ function SettingsPageImpl({
   onCheckUpdate,
   updateLine,
   updateBusy = false,
+  updateChannels,
   onOpenHelp,
   onOpenCommunity,
   selectedTab,
@@ -1172,6 +1175,7 @@ function SettingsPageImpl({
                   </span>
                 }
               />
+              {updateChannels ? <UpdateChannelPanel {...updateChannels} /> : null}
               <Field
                 label={t("s.a6df38586d")}
                 desc={updateLine || t("s.1fd4658c44")}

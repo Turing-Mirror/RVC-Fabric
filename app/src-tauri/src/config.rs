@@ -276,15 +276,58 @@ fn read_json(path: &Path) -> Map<String, Value> {
 
 /// Full effective config: defaults overlaid with what the user has saved.
 pub fn read(root: &Path) -> Map<String, Value> {
+    read_for_channel(root, crate::update_channel::installed() == crate::update_channel::Channel::Beta)
+}
+
+#[cfg(test)]
+mod update_channel_config_tests {
+    use super::*;
+
+    #[test]
+    fn experimental_settings_do_not_override_shared_settings_or_leak_to_stable() {
+        let root = crate::testutil::scratch("channel-config");
+        std::fs::create_dir_all(paths::user_data(&root)).unwrap();
+        std::fs::write(paths::app_config_path(&root), r#"{"pitch":5,"beta_legacy":true}"#).unwrap();
+        std::fs::create_dir_all(beta_config_path(&root).parent().unwrap()).unwrap();
+        std::fs::write(beta_config_path(&root), r#"{"beta_feature":true,"pitch":99}"#).unwrap();
+        let stable = read_for_channel(&root, false);
+        assert_eq!(stable["pitch"], 5);
+        assert!(!stable.contains_key("beta_feature"));
+        assert!(!stable.contains_key("beta_legacy"));
+        let beta = read_for_channel(&root, true);
+        assert_eq!(beta["pitch"], 5);
+        assert_eq!(beta["beta_feature"], true);
+        let patch = serde_json::from_value::<Map<String, Value>>(json!({"pitch":3,"beta_feature":true})).unwrap();
+        assert!(split_beta_patch(patch.clone(), false).is_err());
+        let (shared, experimental) = split_beta_patch(patch, true).unwrap();
+        assert_eq!(shared, serde_json::from_value::<Map<String, Value>>(json!({"pitch":3})).unwrap());
+        assert_eq!(experimental, serde_json::from_value::<Map<String, Value>>(json!({"beta_feature":true})).unwrap());
+        let _ = std::fs::remove_dir_all(root);
+    }
+}
+
+fn beta_config_path(root: &Path) -> std::path::PathBuf {
+    paths::user_data(root).join("update_channels").join("beta_config.json")
+}
+
+fn read_for_channel(root: &Path, beta: bool) -> Map<String, Value> {
     let mut cfg = defaults();
     let path = paths::app_config_path(root);
     if path.is_file() {
         for (k, v) in read_json(&path) {
-            cfg.insert(k, v);
+            if !k.starts_with("beta_") {
+                cfg.insert(k, v);
+            }
         }
     } else {
         // 全新安装：尚无 app_config，标记语言未确认，前端弹首次语言引导。
         cfg.insert("ui_locale_picked".into(), json!(false));
+    }
+    if beta {
+        for (k, v) in read_json(&beta_config_path(root)) {
+            // Experimental overlays cannot override shared device/model settings.
+            if k.starts_with("beta_") { cfg.insert(k, v); }
+        }
     }
     let _ = apply_device_alias(&mut cfg);
     cfg
@@ -698,8 +741,26 @@ pub fn prepare_vc_start(root: &Path) -> Result<Map<String, Value>, String> {
 
 /// Merge `patch` into the saved config; returns the new effective config plus
 /// which keys need a restart of the stream to take effect.
+fn split_beta_patch(
+    patch: Map<String, Value>,
+    beta: bool,
+) -> Result<(Map<String, Value>, Map<String, Value>), String> {
+    let (mut shared, mut experimental) = (Map::new(), Map::new());
+    for (k, v) in patch {
+        if k.starts_with("beta_") {
+            if !beta { return Err(crate::i18n::t("update.invalidChannel")); }
+            experimental.insert(k, v);
+        } else {
+            shared.insert(k, v);
+        }
+    }
+    Ok((shared, experimental))
+}
+
 pub fn update(root: &Path, patch: Map<String, Value>) -> Result<Value, String> {
     let _g = lock_files();
+    let (patch, beta_patch) = split_beta_patch(patch,
+        crate::update_channel::installed() == crate::update_channel::Channel::Beta)?;
     let mut saved = read_json(&paths::app_config_path(root));
     let mut hot = Map::new();
     let mut needs_restart: Vec<String> = Vec::new();
@@ -747,6 +808,14 @@ pub fn update(root: &Path, patch: Map<String, Value>) -> Result<Value, String> {
     let text = serde_json::to_string_pretty(&Value::Object(saved)).map_err(|e| e.to_string())?;
     write_atomic(&paths::app_config_path(root), &text)
         .map_err(|e| crate::i18n::te("s.47a27ebb17", &(e)))?;
+
+    if !beta_patch.is_empty() {
+        let mut experimental = read_json(&beta_config_path(root));
+        experimental.extend(beta_patch);
+        let text = serde_json::to_string_pretty(&experimental).map_err(|e| e.to_string())?;
+        write_atomic(&beta_config_path(root), &text)
+            .map_err(|e| crate::i18n::te("s.47a27ebb17", &(e)))?;
+    }
 
     let cfg = read(root);
     // Only touch the engine's config file when an engine key actually changed.

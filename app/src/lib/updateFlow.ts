@@ -6,9 +6,17 @@
  * - 安装中 `working`；失败回到可点状态并把错误留在原位置，可重试；
  * - `dismiss` 只关闭提示，不更新、不打断当前任务。
  */
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { t } from "../i18n/t";
+
+export type UpdateChannel = "stable" | "beta";
+
+export type UpdateChannelStatus = {
+  channel: UpdateChannel;
+  version: string;
+  beta_available: boolean;
+};
 
 /** `update_check` 的返回。字段名和 `update::decide` 里那个 json! 一一对应。 */
 export type UpdateInfo = {
@@ -23,7 +31,21 @@ export type UpdateInfo = {
   url: string;
   sha256: string;
   notes: string;
+  /** Older stable backends omit channel metadata. */
+  channel?: UpdateChannel;
+  installed_channel?: UpdateChannel;
+  switching_channel?: boolean;
+  downgrade?: boolean;
+  legacy_target?: boolean;
 };
+
+export function updateChannelLabel(channel: UpdateChannel): string {
+  return channel === "beta" ? "Beta" : t("update.stable");
+}
+
+function offerKey(offer: UpdateInfo): string {
+  return `${offer.channel ?? "stable"}:${offer.remote}`;
+}
 
 /** `14:07`。状态行里带个时间，才看得出这句话是刚查的还是上次留下的。 */
 function clockNow(): string {
@@ -36,6 +58,14 @@ function clockNow(): string {
 export function useUpdateFlow() {
   const [line, setLine] = useState("");
   const [busy, setBusy] = useState(false);
+  const [channelStatus, setChannelStatus] = useState<UpdateChannelStatus | null>(null);
+  const channelStatusRef = useRef<UpdateChannelStatus | null>(null);
+  const [selectedChannel, setSelectedChannel] = useState<UpdateChannel>("stable");
+  // A selection is a check target, never a claim that the installed program changed.
+  const selectedTarget = useRef<UpdateChannel | undefined>(undefined);
+  const [checkedTarget, setCheckedTarget] = useState<UpdateInfo | null>(null);
+  const generation = useRef(0);
+  const probeGenerations = useRef(new WeakMap<UpdateInfo, number>());
   // busy 的同步镜像：setBusy 要等重渲染才生效，同一拍里连点两次会双双
   // 通过 state 判定。检查/安装任一在途都由它当场挡住。
   const busyRef = useRef(false);
@@ -50,15 +80,25 @@ export function useUpdateFlow() {
     version: string;
     restart: boolean;
   } | null>(null);
-  // 本会话里已经装好的版本号。offer 对象每次 check 都是新建的，按 remote
-  // 记才不会被「同版本的新对象」绕过；失败/重试不清它。
+  // Keep the channel with the version: changing channels must not inherit a
+  // previous channel's completion marker.
   const doneRemote = useRef("");
 
-  /** 只查，不装。返回后端那份原样的结果，顺手把状态行写好。 */
-  const probe = async (): Promise<UpdateInfo | null> => {
-    const r = (await invoke<Record<string, unknown>>(
-      "update_check",
-    )) as UpdateInfo;
+  const refreshChannelStatus = useCallback(async () => {
+    const status = await invoke<UpdateChannelStatus>("update_channel_status");
+    channelStatusRef.current = status;
+    setChannelStatus(status);
+    if (selectedTarget.current === undefined) setSelectedChannel(status.channel);
+  }, []);
+
+  /** Only checks; a response for an obsolete request cannot replace the target. */
+  const requestCheck = async (): Promise<UpdateInfo | null> => {
+    const request = ++generation.current;
+    const target = selectedTarget.current;
+    const r = await invoke<UpdateInfo>("update_check", target ? { channel: target } : undefined);
+    if (request !== generation.current) return null;
+    probeGenerations.current.set(r, request);
+    setCheckedTarget(r);
     if (r.blocked_by_min_version) {
       setLine(
         t("s.214fe7bcad", {
@@ -76,11 +116,20 @@ export function useUpdateFlow() {
     return r;
   };
 
+  /** Background checks never take over a check or installation already in progress. */
+  const probe = async (): Promise<UpdateInfo | null> => {
+    if (busyRef.current) return null;
+    return requestCheck();
+  };
+
   /** 真正下载并安装。整包走签名更新器，界面补丁走 update_apply。 */
   const install = async (r: UpdateInfo): Promise<{ restart: boolean }> => {
     if (r.action === "external") {
       setLine(t("s.b22f6e52ac", { v0: String(r.remote) }));
-      const b = await invoke<Record<string, unknown>>("update_app");
+      const b = await invoke<Record<string, unknown>>(
+        "update_app",
+        r.channel ? { channel: r.channel, version: r.remote } : { version: r.remote },
+      );
       if (!b?.installed) {
         // 更新器跑完但没装上（取消/校验不过）：这是终态失败，不是
         // 「正在更新」—— 抛出去让 runInstall 复位 working、留可重试的错误。
@@ -104,11 +153,14 @@ export function useUpdateFlow() {
     busyRef.current = true;
     setBusy(true);
     setLine(t("s.481ee2d4bc"));
+    setOffer(null);
+    setError("");
+    setResult(null);
     try {
-      const r = await probe();
+      const r = await requestCheck();
       if (r) {
         // 这个版本本会话已经装过了：状态行如实写「已是最新」，别再弹一遍。
-        if (r.remote === doneRemote.current) {
+        if (offerKey(r) === doneRemote.current) {
           setLine(t("s.7ccca92d5e", { v0: String(r.local), v1: clockNow() }));
         } else {
           setError("");
@@ -125,12 +177,30 @@ export function useUpdateFlow() {
     }
   };
 
+  const selectChannel = async (channel: UpdateChannel) => {
+    if (busyRef.current) return;
+    if (!channelStatusRef.current || (channel === "beta" && !channelStatusRef.current.beta_available)) {
+      setLine(t("update.channelUnavailable"));
+      return;
+    }
+    ++generation.current;
+    selectedTarget.current = channel;
+    setSelectedChannel(channel);
+    setCheckedTarget(null);
+    setOffer(null);
+    setResult(null);
+    setError("");
+    await check();
+  };
+
   /** 确认后的安装。失败留在原位置可重试，不永久停在「正在更新」。 */
   const runInstall = async (r: UpdateInfo) => {
     if (busyRef.current) return;
     // 同版本本会话已装好：残留的确认入口（旧提示、已知问题横幅）再点
     // 也不能再装一遍。
-    if (doneRemote.current && r.remote === doneRemote.current) return;
+    if (doneRemote.current && offerKey(r) === doneRemote.current) return;
+    if (r.channel && selectedTarget.current && r.channel !== selectedTarget.current) return;
+    ++generation.current;
     busyRef.current = true;
     setError("");
     setResult(null);
@@ -138,7 +208,7 @@ export function useUpdateFlow() {
     setBusy(true);
     try {
       const res = await install(r);
-      doneRemote.current = r.remote;
+      doneRemote.current = offerKey(r);
       setResult({ version: r.remote, restart: res.restart });
       // 装完就是终态：提示条停回可点状态，不能永远显示「正在更新」。
       setWorking(false);
@@ -164,6 +234,7 @@ export function useUpdateFlow() {
   const installOffer = async (r: UpdateInfo) => {
     // 先看所有权再动 offer：正在装/检查时不许把在装的提示换掉。
     if (busyRef.current) return;
+    if (r.channel && selectedTarget.current && r.channel !== selectedTarget.current) return;
     setOffer(r);
     await runInstall(r);
   };
@@ -174,7 +245,10 @@ export function useUpdateFlow() {
     // 撤销成可再点的状态，在装的流程被重复触发。
     if (busyRef.current) return;
     // 这版本已经装过：别再弹一遍待确认提示。
-    if (r.remote === doneRemote.current) return;
+    if (offerKey(r) === doneRemote.current) return;
+    const request = probeGenerations.current.get(r);
+    if (request !== undefined && request !== generation.current) return;
+    if (r.channel && selectedTarget.current && r.channel !== selectedTarget.current) return;
     setError("");
     setWorking(false);
     setResult(null);
@@ -182,6 +256,7 @@ export function useUpdateFlow() {
   };
 
   const dismiss = () => {
+    ++generation.current;
     setOffer(null);
     setResult(null);
   };
@@ -193,6 +268,11 @@ export function useUpdateFlow() {
     working,
     error,
     result,
+    channelStatus,
+    selectedChannel,
+    checkedTarget,
+    refreshChannelStatus,
+    selectChannel,
     probe,
     check,
     accept,

@@ -163,7 +163,16 @@ export default function App() {
     installOffer: installOfferUpdate,
     present: presentUpdate,
     dismiss: dismissUpdate,
+    channelStatus: updateChannelStatus,
+    selectedChannel: selectedUpdateChannel,
+    checkedTarget: checkedUpdateTarget,
+    refreshChannelStatus,
+    selectChannel: selectUpdateChannel,
   } = useUpdateFlow();
+
+  useEffect(() => {
+    void refreshChannelStatus().catch(() => {});
+  }, [refreshChannelStatus]);
 
   // 开机时把外观（配色 / 背景图 / 磨砂 / 不透明度）套上。之后用户在设置页
   // 每改一下都由 useConfig 就地再套一次，所以这里只跑一次就够 —— 以前依赖数组
@@ -307,6 +316,12 @@ export default function App() {
     }
     // 下载进度走下面那条更新横幅（两块 Nudge 各占一行，可以并存）——
     // 用户按了按钮就得看得见它在动。
+    if (r.switching_channel) {
+      presentUpdate(r);
+      setSettingsTab("update");
+      setPage("settings");
+      return;
+    }
     await installOfferUpdate(r);
   };
 
@@ -1373,6 +1388,19 @@ export default function App() {
                   onCheckUpdate={() => void checkUpdate()}
                   updateLine={updateLine}
                   updateBusy={updateBusy}
+                  updateChannels={{
+                    status: updateChannelStatus,
+                    selected: selectedUpdateChannel,
+                    target: checkedUpdateTarget,
+                    offer: updateOffer,
+                    busy: updateBusy,
+                    working: updateWorking,
+                    error: updateError,
+                    result: updateResult,
+                    onSelect: (channel) => void selectUpdateChannel(channel),
+                    onAccept: () => void acceptUpdate(),
+                    onDismiss: dismissUpdate,
+                  }}
                   onOpenHelp={openHelp}
                   onOpenCommunity={openCommunity}
                   selectedTab={settingsTab}
@@ -1551,7 +1579,7 @@ export default function App() {
             </>
           }
         >{t(TROUBLE_TEXT[trouble][0])}</Nudge>
-      ) : updateOffer ? (
+      ) : updateOffer && !updateOffer.switching_channel ? (
         <UpdateNudge
           offer={updateOffer}
           working={updateWorking}

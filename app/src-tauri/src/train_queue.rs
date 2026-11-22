@@ -130,6 +130,7 @@ pub fn enqueue(app: AppHandle, root: PathBuf, mut req: TrainReq) -> Result<Value
     let device = train::train_device(&root).to_owned();
     let result;
     {
+        let _update_admission = crate::update::task_start_guard()?;
         let mut slot = lock();
         let q = load(&mut slot, &root)?;
         if conflict(q, &req, None) {
@@ -193,6 +194,7 @@ fn change(q: &mut Queue, id: &str, action: &str) -> Result<bool, String> {
 pub fn action(app: AppHandle, root: PathBuf, id: String, action: String) -> Result<Value, String> {
     let result;
     {
+        let _update_admission = crate::update::task_start_guard()?;
         let mut slot = lock();
         let q = load(&mut slot, &root)?;
         let before = q.clone();

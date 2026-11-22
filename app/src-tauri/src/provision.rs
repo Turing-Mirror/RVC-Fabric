@@ -33,6 +33,7 @@ impl Drop for ProvisionGuard {
 }
 
 pub fn try_begin() -> Result<ProvisionGuard, String> {
+    let _update_admission = crate::update::task_start_guard()?;
     let mut g = PROVISION_BUSY.lock().unwrap_or_else(|e| e.into_inner());
     if *g {
         return Err(crate::i18n::t("s.eca157a71e"));

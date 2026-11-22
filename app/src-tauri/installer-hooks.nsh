@@ -37,6 +37,7 @@ Var MoveReport
 !macroend
 
 !macro NSIS_HOOK_PREINSTALL
+  !insertmacro CheckIfAppIsRunning "${MAINBINARYNAME}.exe" "${PRODUCTNAME}"
   ; 路径里有中文时 faiss 读不了检索库。OTA 静默升级不要挡（已经装在中文目录
   ; 的人卸了重来更糟），正常安装弹一句，让他改到 D:\RVCFabric 这种纯英文路径。
   IfSilent skip_nonascii_warn
@@ -150,6 +151,19 @@ Var MoveReport
   Delete "$INSTDIR\unins000.exe"
   Delete "$INSTDIR\unins000.dat"
   Delete "$INSTDIR\unins000.msg"
+  ; Only prepare resources after every user-cancellable check has completed.
+  ; User files and downloaded components are excluded from this inventory.
+  !insertmacro StopInstallDirProcesses "$INSTDIR"
+  InitPluginsDir
+  File "/oname=$PLUGINSDIR\prepare-update.exe" "${MAINBINARYSRCPATH}"
+  ClearErrors
+  ExecWait '"$PLUGINSDIR\prepare-update.exe" --prepare-update "$INSTDIR"' $R0
+  IfErrors program_cleanup_failed
+  StrCmp $R0 0 program_cleanup_ready
+  program_cleanup_failed:
+    MessageBox MB_OK|MB_ICONSTOP "无法准备更新。请关闭正在运行的 RVC Fabric 后重试，或重新运行原版本安装包修复。用户数据与运行环境保持不变。"
+    Abort
+  program_cleanup_ready:
 !macroend
 
 !macro NSIS_HOOK_POSTINSTALL
@@ -167,6 +181,21 @@ Var MoveReport
 !macroend
 
 !macro NSIS_HOOK_PREUNINSTALL
+  ; The old Stable installer runs this Beta uninstaller during a downgrade.
+  ; Clean resources using the installed inventory before its files disappear.
+  StrCmp $UpdateMode 1 prepare_program_replacement
+  StrCmp $PassiveMode 1 prepare_program_replacement skip_program_replacement
+  prepare_program_replacement:
+    !insertmacro CheckIfAppIsRunning "${MAINBINARYNAME}.exe" "${PRODUCTNAME}"
+    !insertmacro StopInstallDirProcesses "$INSTDIR"
+    IfFileExists "$INSTDIR\${MAINBINARYNAME}.exe" 0 skip_program_replacement
+    ClearErrors
+    ExecWait '"$INSTDIR\${MAINBINARYNAME}.exe" --prepare-update "$INSTDIR"' $R0
+    IfErrors uninstall_cleanup_failed
+    StrCmp $R0 0 skip_program_replacement
+    uninstall_cleanup_failed:
+      Abort "无法准备程序文件替换，请先关闭 RVC Fabric 后重试。"
+  skip_program_replacement:
   ; 默认保留用户数据。OTA / 被动升级把 /UPDATE、/P 传给卸载器时整段跳过。
   StrCpy $KeepUserData 1
   StrCmp $UpdateMode 1 skip_uninst_kill

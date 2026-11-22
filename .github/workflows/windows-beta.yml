@@ -1,0 +1,100 @@
+name: Build RVC Fabric Beta
+
+on:
+  push:
+    branches:
+      - tm-release
+      - codex/beta-channel
+    paths-ignore:
+      - 'docs/*.md'
+      - 'docs/releases/**'
+      - 'docs/lang/**'
+      - 'docs/i18n-copy/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rvc-beta-build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONUTF8: "1"
+  GIT_CONFIG_COUNT: "1"
+  GIT_CONFIG_KEY_0: url.https://github.com/.insteadOf
+  GIT_CONFIG_VALUE_0: ssh://git@github.com/
+
+jobs:
+  beta:
+    name: Build and sign Beta Windows x64 setup
+    if: github.ref == 'refs/heads/tm-release' || github.ref == 'refs/heads/codex/beta-channel'
+    runs-on: windows-2025
+    timeout-minutes: 50
+    environment: beta
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - name: Select the Windows Rust toolchain
+        run: rustup default stable-x86_64-pc-windows-msvc
+      - name: Install frontend dependencies
+        working-directory: app
+        run: npm ci --no-audit --no-fund
+      - name: Test the source and Beta publishing logic
+        run: |
+          python -m unittest tests.test_version_sync tests.test_beta_version tests.test_beta_release -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node --test tests/test_setup_signature.mjs tests/test_beta_signature.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm --prefix app test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Assign the Beta version in this checkout
+        id: version
+        run: python scripts/beta_version.py --number $env:GITHUB_RUN_NUMBER
+      - name: Build the Beta installer
+        env:
+          BETA_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $env:CARGO_TARGET_DIR = Join-Path $env:RUNNER_TEMP 'rvc-beta-target'
+          Push-Location app
+          npm run tauri:build -- --ci --bundles nsis -- --locked
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Pop-Location
+          $built = Join-Path $env:CARGO_TARGET_DIR "release/bundle/nsis/RVC Fabric_$env:BETA_VERSION`_x64-setup.exe"
+          New-Item -ItemType Directory -Force dist/beta | Out-Null
+          $name = "RVC-Fabric-Setup-$env:BETA_VERSION.exe"
+          Copy-Item -LiteralPath $built -Destination "dist/beta/$name"
+          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath "dist/beta/$name").Hash.ToLowerInvariant()
+          [IO.File]::WriteAllText((Join-Path (Get-Location) "dist/beta/$name.sha256"), "$hash  $name`n", [Text.Encoding]::ASCII)
+      - name: Sign with the independent Beta key and verify the package
+        env:
+          BETA_VERSION: ${{ steps.version.outputs.version }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.BETA_TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if (!$env:TAURI_SIGNING_PRIVATE_KEY) { throw 'Set the Beta signing key in the beta environment.' }
+          $installer = (Resolve-Path "dist/beta/RVC-Fabric-Setup-$env:BETA_VERSION.exe").Path
+          node app/node_modules/@tauri-apps/cli/tauri.js signer sign --password '' $installer
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/beta_release.py --prepare --version $env:BETA_VERSION --directory dist/beta --commit $env:GITHUB_SHA --run-id $env:GITHUB_RUN_ID
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload the signed Beta for local publication
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: RVC Fabric Beta x64
+          path: |
+            dist/beta/RVC-Fabric-Setup-${{ steps.version.outputs.version }}.exe
+            dist/beta/RVC-Fabric-Setup-${{ steps.version.outputs.version }}.exe.sig
+            dist/beta/RVC-Fabric-Setup-${{ steps.version.outputs.version }}.exe.sha256
+            dist/beta/build-${{ steps.version.outputs.version }}.json
+            dist/beta/updater-beta.json
+          if-no-files-found: error
+          retention-days: 5

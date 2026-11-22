@@ -1380,6 +1380,7 @@ pub(crate) fn run_queued(
         if job_id.is_some_and(crate::train_queue::cancelled) {
             return Err(crate::i18n::t("s.a5ffdc95ee"));
         }
+        let _update_admission = crate::update::task_start_guard()?;
         let admission = match START_GATE.try_lock() {
             Ok(guard) => Some(guard),
             Err(std::sync::TryLockError::Poisoned(e)) => Some(e.into_inner()),
@@ -1395,6 +1396,7 @@ pub(crate) fn run_queued(
             drop(g);
             drop(admission);
         }
+        drop(_update_admission);
         if job_id.is_none() {
             return Err(crate::i18n::t("s.fce4b463c1"));
         }

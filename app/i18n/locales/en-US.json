@@ -927,7 +927,6 @@
     "690ac0b101": "Compressor",
     "69f4bc1200": "App input",
     "6a025ac81b": "A conversion task is already running; please wait for it to finish",
-    "6a3b354477": "Update signing key not configured. Download the new version from the release page manually",
     "6a6564705b": "Runtime environment version",
     "6a71c2fde0": "Train a new voice from one person’s dry vocal recordings. Requires an NVIDIA GPU; the duration depends on your hardware and may take hours.",
     "6aa0d5bedd": "Runtime environment not ready. Finish setup first",
@@ -940,7 +939,7 @@
     "6bde20da46": "Connecting and preparing to download engine resources",
     "6c0434f6f2": "12 s after launch",
     "6c14bd7f6f": "Close",
-    "6c26ecbfb3": "\"Check now\" downloads and installs right away; it takes effect after a restart.",
+    "6c26ecbfb3": "Check now only checks versions. Download and installation start after you confirm.",
     "6c4698ee82": "To hear yourself in real time, enable \"Monitor myself\" and pick headphones.",
     "6c488bda4d": "Ratio: 4:1 is typical. Higher values flatten the sound more; values that are too high sound dull and lose dynamics.",
     "6c4b38602a": "Select the dataset folder first",
@@ -2575,5 +2574,25 @@
     "removeDraftConfirm": "Delete this draft?",
     "withdrawConfirm": "Withdraw this submission?",
     "saveFailed": "Could not save the draft on this device."
+  },
+  "update": {
+    "stable": "Stable",
+    "currentChannel": "Installed channel",
+    "targetChannel": "Update channel",
+    "targetVersion": "Target version",
+    "selectOnly": "Selecting a channel only checks for a version. Download and installation require confirmation.",
+    "betaHint": "Beta follows the latest successful build and may contain undiscovered issues.",
+    "switchTitle": "Switch to {channel} {version}?",
+    "switchBody": "The full installer for the target channel will replace the program. Save your work and stop voice conversion and training first.",
+    "downgradeBody": "The target version is older, so this will downgrade the program. Compatible settings, models and recordings are preserved; incompatible data prevents the switch.",
+    "legacyStableHint": "Older stable versions have no channel selector. To return to Beta afterward, download its installer from the Beta release page.",
+    "switchInstall": "Switch and install",
+    "channelUnavailable": "This build has no Beta update channel configured.",
+    "targetChanged": "The target version has changed. Check again and confirm before installing.",
+    "tasksBusy": "Stop voice conversion, training and other active tasks before installing the update.",
+    "dataIncompatible": "Your data is incompatible with the target version, so switching is unavailable.",
+    "backupFailed": "Update files could not be backed up or prepared. Installation has not started.",
+    "invalidChannel": "Invalid update channel.",
+    "invalidVersion": "Invalid update version."
   }
 }

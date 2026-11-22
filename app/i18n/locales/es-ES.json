@@ -927,7 +927,6 @@
     "690ac0b101": "Compresor",
     "69f4bc1200": "Entrada del programa",
     "6a025ac81b": "Ya hay una tarea de conversión en curso; espere a que termine",
-    "6a3b354477": "La clave de firma de actualizaciones no está configurada; descarga la nueva versión a mano desde la página de lanzamientos",
     "6a6564705b": "Versión del entorno de ejecución",
     "6a71c2fde0": "Entrene una voz nueva con grabaciones secas de una persona. Requiere una GPU NVIDIA; la duración depende del hardware y puede llevar horas.",
     "6aa0d5bedd": "El entorno de ejecución no está listo; instálalo primero",
@@ -940,7 +939,7 @@
     "6bde20da46": "Conectando y preparando la descarga de los recursos del motor",
     "6c0434f6f2": "12 s después del inicio",
     "6c14bd7f6f": "Cerrar",
-    "6c26ecbfb3": "«Comprobar ahora» descarga e instala al momento; surte efecto tras reiniciar.",
+    "6c26ecbfb3": "«Comprobar ahora» solo consulta la versión. La descarga e instalación empiezan tras confirmar.",
     "6c4698ee82": "Para oírte en tiempo real, activa «Escucharme durante el cambio» y elige auriculares.",
     "6c488bda4d": "Relación de compresión; 4:1 es lo habitual. Cuanto mayor, más «plano»; pasarse suena apagado y sin matices.",
     "6c4b38602a": "Elige primero la carpeta del conjunto de datos",
@@ -2575,5 +2574,25 @@
     "removeDraftConfirm": "¿Eliminar este borrador?",
     "withdrawConfirm": "¿Retirar este envío?",
     "saveFailed": "No se pudo guardar el borrador en este dispositivo."
+  },
+  "update": {
+    "stable": "Estable",
+    "currentChannel": "Canal instalado",
+    "targetChannel": "Canal de actualización",
+    "targetVersion": "Versión de destino",
+    "selectOnly": "Elegir un canal solo comprueba la versión. La descarga e instalación requieren confirmación.",
+    "betaHint": "Beta sigue la última compilación correcta y puede contener problemas aún no detectados.",
+    "switchTitle": "¿Cambiar a {channel} {version}?",
+    "switchBody": "El instalador completo del canal de destino reemplazará el programa. Guarda tu trabajo y detén la conversión de voz y el entrenamiento.",
+    "downgradeBody": "La versión de destino es anterior. Se conservarán los ajustes, modelos y grabaciones compatibles; los datos incompatibles impedirán el cambio.",
+    "legacyStableHint": "Las versiones estables antiguas no tienen selector de canal. Para volver a Beta después, descarga su instalador desde la página de versiones Beta.",
+    "switchInstall": "Cambiar e instalar",
+    "channelUnavailable": "Esta compilación no tiene configurado el canal Beta.",
+    "targetChanged": "La versión de destino ha cambiado. Compruébala y confirma de nuevo antes de instalar.",
+    "tasksBusy": "Detén la conversión de voz, el entrenamiento y las demás tareas activas antes de instalar la actualización.",
+    "dataIncompatible": "Los datos no son compatibles con la versión de destino y no se puede cambiar.",
+    "backupFailed": "No se pudieron respaldar o preparar los archivos de actualización. La instalación no ha comenzado.",
+    "invalidChannel": "Canal de actualización no válido.",
+    "invalidVersion": "Versión de actualización no válida."
   }
 }

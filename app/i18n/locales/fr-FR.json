@@ -927,7 +927,6 @@
     "690ac0b101": "Compresseur",
     "69f4bc1200": "Entrée du logiciel",
     "6a025ac81b": "Une tâche de conversion est déjà en cours ; merci d'attendre qu'elle se termine",
-    "6a3b354477": "Clé de signature des mises à jour non configurée : téléchargez la nouvelle version à la main sur la page des versions",
     "6a6564705b": "Version de l'environnement d'exécution",
     "6a71c2fde0": "Entraînez une nouvelle voix à partir d'enregistrements secs d'une personne. Nécessite un GPU NVIDIA ; la durée dépend du matériel et peut atteindre plusieurs heures.",
     "6aa0d5bedd": "Environnement d'exécution pas prêt : installez-le d'abord",
@@ -940,7 +939,7 @@
     "6bde20da46": "Connexion en cours, préparation du téléchargement des ressources du moteur",
     "6c0434f6f2": "12 s après le démarrage",
     "6c14bd7f6f": "Fermer",
-    "6c26ecbfb3": "« Vérifier maintenant » télécharge et installe aussitôt ; effet après redémarrage.",
+    "6c26ecbfb3": "« Vérifier maintenant » consulte seulement la version. Le téléchargement et l’installation commencent après confirmation.",
     "6c4698ee82": "Pour vous entendre en temps réel, cochez « M'écouter pendant le changement de voix » et choisissez un casque.",
     "6c488bda4d": "Ratio de compression ; 4:1 est courant. Plus il est grand, plus c'est « plat » ; trop, et le son devient étouffé, sans relief.",
     "6c4b38602a": "Choisissez d'abord le dossier du jeu de données",
@@ -2575,5 +2574,25 @@
     "removeDraftConfirm": "Supprimer ce brouillon ?",
     "withdrawConfirm": "Retirer cet envoi ?",
     "saveFailed": "Impossible d’enregistrer le brouillon sur cet appareil."
+  },
+  "update": {
+    "stable": "Stable",
+    "currentChannel": "Canal installé",
+    "targetChannel": "Canal de mise à jour",
+    "targetVersion": "Version cible",
+    "selectOnly": "Choisir un canal vérifie seulement la version. Le téléchargement et l’installation nécessitent une confirmation.",
+    "betaHint": "Beta suit la dernière compilation réussie et peut contenir des problèmes encore inconnus.",
+    "switchTitle": "Passer à {channel} {version} ?",
+    "switchBody": "L’installateur complet du canal cible remplacera le programme. Enregistrez votre travail et arrêtez la conversion vocale et l’entraînement.",
+    "downgradeBody": "La version cible est plus ancienne. Les paramètres, modèles et enregistrements compatibles sont conservés ; les données incompatibles empêchent le changement.",
+    "legacyStableHint": "Les anciennes versions stables n’ont pas de sélecteur de canal. Pour revenir à Beta ensuite, téléchargez son installateur depuis la page des versions Beta.",
+    "switchInstall": "Changer et installer",
+    "channelUnavailable": "Aucun canal de mise à jour Beta n’est configuré dans cette compilation.",
+    "targetChanged": "La version cible a changé. Vérifiez et confirmez à nouveau avant l’installation.",
+    "tasksBusy": "Arrêtez la conversion vocale, l’entraînement et les autres tâches actives avant d’installer la mise à jour.",
+    "dataIncompatible": "Les données sont incompatibles avec la version cible. Le changement est impossible.",
+    "backupFailed": "Impossible de sauvegarder ou de préparer les fichiers de mise à jour. L’installation n’a pas commencé.",
+    "invalidChannel": "Canal de mise à jour non valide.",
+    "invalidVersion": "Version de mise à jour non valide."
   }
 }

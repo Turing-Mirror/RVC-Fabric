@@ -46,10 +46,18 @@ def read_json(path):
     return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
+
+def command_env(args):
+    """CNB_TOKEN only carries release upload rights; git keeps its own sign-in to push."""
+    env = {**os.environ, "GIT_LFS_SKIP_SMUDGE": "1", "PYTHONUTF8": "1"}
+    if str(args[0]) == "git":
+        env.pop("CNB_TOKEN", None)
+    return env
+
 def run(*args, cwd=None, capture=False):
     result = subprocess.run(args, cwd=cwd, check=True, text=True, encoding="utf-8",
                             stdout=subprocess.PIPE if capture else None,
-                            env={**os.environ, "GIT_LFS_SKIP_SMUDGE": "1", "PYTHONUTF8": "1"})
+                            env=command_env(args))
     return result.stdout.strip() if capture else None
 
 

@@ -378,6 +378,19 @@ class AtomicGitFeed(unittest.TestCase):
         self.assertEqual(result.stdout.strip(), beta.FEED_NAME)
         with beta.GitFeed() as feed:
             self.assertEqual(feed.read()["version"], "1.8.2-beta.1")
+
+    def test_git_askpass_handles_windows_newlines_and_paths_with_spaces(self):
+        factory = tempfile.TemporaryDirectory
+        with patch.dict(beta.os.environ, {"CNB_TOKEN": "fixture-only-token"}), patch.object(
+                beta.tempfile, "TemporaryDirectory", side_effect=lambda **_: factory(prefix="rvc beta feed ")):
+            with beta.GitFeed() as feed:
+                result = subprocess.run(
+                    [beta.executable("git"), "-c", "credential.helper=", "-c", "credential.username=cnb", "credential", "fill"],
+                    input="protocol=https\nhost=cnb.cool\n\n", env=feed.env, cwd=feed.root,
+                    capture_output=True, text=True, encoding="utf-8", timeout=20,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("password=fixture-only-token", result.stdout)
             class PublicResponse:
                 def __enter__(self):
                     return self

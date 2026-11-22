@@ -376,10 +376,10 @@ class GitFeed:
             askpass = scratch / "askpass.sh"
             askpass.write_text(
                 '#!/bin/sh\ncase "$1" in\n*sername*) printf "%s\\n" "cnb" ;;\n'
-                '*) printf "%s\\n" "$CNB_TOKEN" ;;\nesac\n', encoding="utf-8",
+                '*) printf "%s\\n" "$CNB_TOKEN" ;;\nesac\n', encoding="utf-8", newline="\n",
             )
             askpass.chmod(0o700)
-            self.env["GIT_ASKPASS"] = str(askpass)
+            self.env["GIT_ASKPASS"] = askpass.as_posix()
         try:
             self.run("init", "--quiet")
             self.run("remote", "add", "origin", FEED_GIT_REMOTE)

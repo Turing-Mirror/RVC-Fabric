@@ -1,6 +1,6 @@
 {
   "beta": {
-    "endpoint": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/setup-beta/updater-beta.json",
+    "endpoint": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/git/raw/beta-updates/updater-beta.json",
     "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IERDM0ZBMUM3QTRCNjkwMUIKUldRYmtMYWt4NkUvM0dUSW9jOWNiUXgvNGZnTE4vcktWaWNUL010Y0dGbHlMbndKdXU5V0VRNXIK"
   },
   "data_schema": 1,

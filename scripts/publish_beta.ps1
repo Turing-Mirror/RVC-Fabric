@@ -23,7 +23,7 @@ try {
             $encrypted = [IO.File]::ReadAllText($tokenPath, [Text.Encoding]::UTF8)
             $secureToken = ConvertTo-SecureString $encrypted
         } else {
-            $secureToken = Read-Host 'CNB personal token (repo-release:rw; hidden input)' -AsSecureString
+            $secureToken = Read-Host 'CNB personal token (repo-release:rw and repo-code:rw; hidden input)' -AsSecureString
         }
         $tokenPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureToken)
         $env:CNB_TOKEN = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($tokenPointer)

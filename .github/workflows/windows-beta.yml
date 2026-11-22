@@ -45,7 +45,17 @@ jobs:
         with:
           python-version: "3.13"
       - name: Select the Windows Rust toolchain
-        run: rustup default stable-x86_64-pc-windows-msvc
+        id: rust
+        run: |
+          rustup default stable-x86_64-pc-windows-msvc
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $version = (rustc --version) -replace '\s+', '-'
+          "version=$version" >> $env:GITHUB_OUTPUT
+      - name: Reuse the Beta Rust compilation cache
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ runner.temp }}/rvc-beta-target
+          key: rvc-beta-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust.outputs.version }}-${{ hashFiles('app/src-tauri/Cargo.lock', 'app/audio-core/Cargo.toml') }}
       - name: Install frontend dependencies
         working-directory: app
         run: npm ci --no-audit --no-fund

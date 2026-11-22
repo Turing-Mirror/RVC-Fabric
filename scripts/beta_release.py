@@ -1,7 +1,8 @@
 """Verify a signed GitHub Beta artifact and optionally publish it locally to CNB.
 
 Cloud builds call --prepare after signing. Local use defaults to a download and
-verification only; --publish explicitly updates the independent setup-beta feed.
+verification only; --publish uploads immutable setup-beta attachments, then
+advances the updater pointer through the independent beta-updates Git branch.
 CNB authentication is delegated to the installed CLI, never copied to GitHub.
 """
 
@@ -31,6 +32,9 @@ CNB_REPO = "Turing-Mirror/RVC-Fabric-Releases"
 TAG = "setup-beta"
 ARTIFACT = "RVC Fabric Beta x64"
 FEED_NAME = "updater-beta.json"
+FEED_BRANCH = "beta-updates"
+FEED_REF = "refs/heads/" + FEED_BRANCH
+FEED_GIT_REMOTE = f"https://cnb.cool/{CNB_REPO}.git"
 PUBLIC = f"https://cnb.cool/{CNB_REPO}/-/releases/download/{TAG}/"
 ALLOWED_BRANCHES = {"tm-release", "codex/beta-channel"}
 USER_AGENT = "RVC-Fabric-Beta-Publisher"
@@ -143,6 +147,7 @@ def prepare_metadata(directory: Path, version: str, commit: str, run_id: str,
         "size_bytes": signed["size_bytes"], "sha256": signed["sha256"],
         "pub_date": signed["pub_date"], "data_schema": channels["data_schema"],
         "min_stable_version": channels["minimum_stable_version"],
+        "updater_endpoint": channels["beta"]["endpoint"],
     }
     write_json(directory / record_name(version), record)
     feed = {
@@ -157,6 +162,9 @@ def prepare_metadata(directory: Path, version: str, commit: str, run_id: str,
 
 def verify_record(directory: Path, record: dict, *, run: dict | None = None) -> None:
     version = record["version"]
+    channels = read_json(ROOT / "app/src-tauri/update-channels.json")
+    if record.get("updater_endpoint") != channels["beta"]["endpoint"]:
+        raise ValueError("Beta artifact updater endpoint does not match this client")
     installer = directory / installer_name(version)
     if record["installer"] != installer.name or record["channel"] != "beta" or record["target"] != "windows-x86_64":
         raise ValueError("Beta artifact identity is inconsistent")
@@ -174,7 +182,6 @@ def verify_record(directory: Path, record: dict, *, run: dict | None = None) -> 
             != record["sha256"] + "  " + installer.name):
         raise ValueError("Beta artifact signature or checksum is inconsistent")
     feed = read_json(directory / FEED_NAME)
-    channels = read_json(ROOT / "app/src-tauri/update-channels.json")
     expected_platform = {"url": PUBLIC + installer.name, "signature": signed["signature"]}
     if (record.get("data_schema") != channels["data_schema"] or
             record.get("min_stable_version") != channels["minimum_stable_version"] or
@@ -256,6 +263,8 @@ class CNBClient:
                          data={"prerelease": True, "make_latest": "false"})
 
     def upload(self, release_id: str, path: Path, *, overwrite: bool):
+        if overwrite or path.name == FEED_NAME:
+            raise ValueError("Beta Release attachments are immutable; the feed belongs in Git")
         result = self.call("post-release-asset-upload-url", "--release-id", release_id, data={
             "asset_name": path.name, "size": path.stat().st_size, "overwrite": overwrite, "ttl": 0,
         })
@@ -333,14 +342,109 @@ def wait_for_asset(client: CNBClient, path: Path) -> dict:
     raise ValueError("CNB server or public download does not match the verified Beta attachment")
 
 
-def current_feed(release: dict) -> dict | None:
-    asset = assets_by_name(release).get(FEED_NAME)
-    if asset is None:
+class GitFeed:
+    """A disposable checkout that can only fast-forward beta-updates."""
+
+    def __init__(self, branch: str = FEED_BRANCH):
+        if branch != FEED_BRANCH:
+            raise ValueError("Only the beta-updates branch may hold the Beta feed")
+        self.temporary = None
+        self.root = None
+        self.env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_LFS_SKIP_SMUDGE": "1"}
+
+    def run(self, *arguments: str, accepted=(0,)) -> subprocess.CompletedProcess:
+        command = [executable("git")]
+        if self.env.get("CNB_TOKEN"):
+            # Use only the explicit token through askpass, not a stale helper.
+            command += ["-c", "credential.helper=", "-c", "credential.username=cnb"]
+        command += list(arguments)
+        try:
+            result = subprocess.run(command, cwd=self.root, env=self.env, capture_output=True,
+                                    text=True, encoding="utf-8", timeout=180)
+        except subprocess.TimeoutExpired:
+            raise RuntimeError("Beta feed Git operation timed out; verify remote state before retrying") from None
+        if result.returncode not in accepted:
+            raise RuntimeError("Beta feed Git operation failed; verify remote state before retrying")
+        return result
+
+    def __enter__(self):
+        self.temporary = tempfile.TemporaryDirectory(prefix="rvc-beta-feed-")
+        scratch = Path(self.temporary.name)
+        self.root = scratch / "repository"
+        self.root.mkdir()
+        if self.env.get("CNB_TOKEN"):
+            askpass = scratch / "askpass.sh"
+            askpass.write_text(
+                '#!/bin/sh\ncase "$1" in\n*sername*) printf "%s\\n" "cnb" ;;\n'
+                '*) printf "%s\\n" "$CNB_TOKEN" ;;\nesac\n', encoding="utf-8",
+            )
+            askpass.chmod(0o700)
+            self.env["GIT_ASKPASS"] = str(askpass)
+        try:
+            self.run("init", "--quiet")
+            self.run("remote", "add", "origin", FEED_GIT_REMOTE)
+            exists = self.run("ls-remote", "--exit-code", "origin", FEED_REF, accepted=(0, 2))
+            if exists.returncode == 0:
+                self.run("fetch", "--quiet", "--no-tags", "origin", FEED_REF)
+                self.run("checkout", "--quiet", "-b", FEED_BRANCH, "FETCH_HEAD")
+            else:
+                self.run("checkout", "--quiet", "--orphan", FEED_BRANCH)
+            return self
+        except Exception:
+            self.temporary.cleanup()
+            raise
+
+    def __exit__(self, *_):
+        if self.temporary is not None:
+            self.temporary.cleanup()
+
+    def read(self) -> dict | None:
+        path = self.root / FEED_NAME
+        return read_json(path) if path.is_file() else None
+
+    def advance(self, path: Path) -> None:
+        if self.run("symbolic-ref", "HEAD").stdout.strip() != FEED_REF:
+            raise ValueError("Refusing to push a feed outside beta-updates")
+        feed = read_json(path)
+        version_key(feed["version"])
+        if feed.get("channel") != "beta" or path.name != FEED_NAME:
+            raise ValueError("Only the Beta updater manifest may be committed")
+        write_json(self.root / FEED_NAME, feed)
+        self.run("add", "--", FEED_NAME)
+        self.run("-c", "user.name=RVC Fabric Beta Publisher", "-c", "user.email=beta@turingmirror.com",
+                 "-c", "commit.gpgSign=false", "commit", "--quiet", "-m", f"Publish Beta {feed['version']}",
+                 "--", FEED_NAME)
+        # A concurrent publisher changes the remote parent and this normal push
+        # fails rather than replacing their pointer. Never use force/lease.
+        self.run("push", "origin", "HEAD:" + FEED_REF)
+
+    def verify_public(self) -> None:
+        expected = self.read()
+        endpoint = read_json(ROOT / "app/src-tauri/update-channels.json")["beta"]["endpoint"]
+        if urllib.parse.urlsplit(endpoint).scheme != "https":
+            raise ValueError("The public Beta feed requires HTTPS")
+        for delay in (0, 2, 5, 10):
+            if delay:
+                time.sleep(delay)
+            request = urllib.request.Request(endpoint, headers={
+                "User-Agent": USER_AGENT, "Cache-Control": "no-cache",
+            })
+            try:
+                # This is deliberately anonymous: a client must be able to read
+                # the pointer without any local CLI or Git credentials.
+                with urllib.request.urlopen(request, timeout=30) as response:
+                    actual = json.loads(response.read(2 * 1024 * 1024))
+                if actual == expected:
+                    return
+            except (urllib.error.URLError, OSError, ValueError):
+                pass
+        raise RuntimeError("Beta feed Git pointer exists, but public verification is incomplete; retry publication")
+
+
+def current_feed(store) -> dict | None:
+    feed = store.read()
+    if feed is None:
         return None
-    data = public_download(FEED_NAME, asset.get("size", asset.get("size_in_byte")))
-    if hashlib.sha256(data).hexdigest() != asset.get("hash_value"):
-        raise ValueError("Current Beta feed download is stale or corrupt; retry later")
-    feed = json.loads(data)
     version_key(feed["version"])
     if feed.get("channel") != "beta":
         raise ValueError("Current Beta feed has an unexpected channel")
@@ -369,7 +473,7 @@ def same_published_source(release: dict, feed: dict, candidate: dict) -> bool:
     return (isinstance(source, str) and re.fullmatch(r"[0-9a-f]{40}", source) is not None and
             source == candidate.get("source_commit") and
             all(previous.get(field) == candidate.get(field)
-                for field in ("channel", "target", "data_schema", "min_stable_version")))
+                for field in ("channel", "target", "data_schema", "min_stable_version", "updater_endpoint")))
 
 
 def cleanup(client: CNBClient, release: dict, current: str, keep: int = 10) -> None:
@@ -422,12 +526,17 @@ def publication_lock():
                 fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
 
 
-def publish(directory: Path, record: dict, *, client: CNBClient | None = None, keep: int = 10) -> str:
+def publish(directory: Path, record: dict, *, client: CNBClient | None = None,
+            keep: int = 10, feed_store=None) -> str:
     with publication_lock():
-        return publish_locked(directory, record, client=client, keep=keep)
+        if feed_store is not None:
+            return publish_locked(directory, record, client=client, keep=keep, feed_store=feed_store)
+        with GitFeed() as store:
+            return publish_locked(directory, record, client=client, keep=keep, feed_store=store)
 
 
-def publish_locked(directory: Path, record: dict, *, client: CNBClient | None = None, keep: int = 10) -> str:
+def publish_locked(directory: Path, record: dict, *, client: CNBClient | None = None,
+                   keep: int = 10, feed_store) -> str:
     if keep < 2:
         raise ValueError("Keep at least the current and previous Beta")
     client = client or CNBClient()
@@ -436,14 +545,16 @@ def publish_locked(directory: Path, record: dict, *, client: CNBClient | None = 
     if release is None:
         release = client.create_release()
     existing = assets_by_name(release)
-    current = current_feed(release)
+    current = current_feed(feed_store)
     if current is not None:
         if version_key(version) == version_key(current["version"]):
             remote = existing.get(installer_name(version))
             if remote is None or not asset_matches(remote, directory / installer_name(version)):
                 raise ValueError("The published Beta version has different installer bytes")
+            feed_store.verify_public()
             return "already-published"
         if same_published_source(release, current, record):
+            feed_store.verify_public()
             return "already-published-source"
         if version_key(version) < version_key(current["version"]):
             raise ValueError("This older Beta cannot replace the newer published feed")
@@ -478,14 +589,14 @@ def publish_locked(directory: Path, record: dict, *, client: CNBClient | None = 
             client.upload(str(release["id"]), path, overwrite=False)
         release = wait_for_asset(client, path)
 
-    # Recheck immediately before advancing the only mutable file. The local
-    # mutex serializes operators on this machine; a changed remote feed aborts.
-    current = current_feed(client.get_release())
+    # The Git checkout holds the original parent. A normal push atomically
+    # advances that ref or refuses a competing publisher's newer parent.
+    current = current_feed(feed_store)
     if current is not None and version_key(current["version"]) >= version_key(version):
         raise ValueError("The Beta feed advanced during publication; leaving it unchanged")
     feed = directory / FEED_NAME
-    client.upload(str(release["id"]), feed, overwrite=True)
-    release = wait_for_asset(client, feed)
+    feed_store.advance(feed)
+    feed_store.verify_public()
     try:
         cleanup(client, release, version, keep)
     except (RuntimeError, ValueError):

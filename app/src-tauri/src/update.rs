@@ -748,9 +748,10 @@ pub async fn run_app_updater(
     {
         // The plugin ignores ShellExecute failure and exits regardless. Launch
         // directly so an OS refusal restores resources while this UI is alive.
+        // Stop workers before NSIS can detect and close this running process.
+        crate::shutdown_for_update(app);
         let _installer = launch_windows_installer(root, &installer, &version)
             .map_err(|e| crate::i18n::te("s.90d174c86a", &e))?;
-        crate::shutdown_for_update(app);
         app.cleanup_before_exit();
         std::process::exit(0);
     }

@@ -1,4 +1,8 @@
-"""Publish the final RVC Fabric update for clients that read the CNB catalog."""
+"""Publish a signed RVC Fabric release to the CNB catalog.
+
+Run it after the GitHub release is public. The website syncs from CNB afterwards.
+The version defaults to app/package.json.
+"""
 import argparse
 import hashlib
 import json
@@ -17,16 +21,25 @@ import yaml
 from publish_asset import ensure_release, upload
 
 
-VERSION = "1.8.0"
-NAME = f"RVC-Fabric-Setup-{VERSION}.exe"
 PRODUCT = "Turing-Mirror/RVC-Fabric"
 CNB = "Turing-Mirror/RVC-Fabric-Releases"
 ORIGIN = f"https://cnb.cool/{CNB}"
 ASSETS = f"{ORIGIN}/-/releases/download/setup/"
 FIXED_NAME = "RVC_Fabric_Setup.exe"
-URL = ASSETS + NAME
-SITE = "https://www.turingmirror.com/releases/rvc-fabric/"
 ROOT = Path(__file__).resolve().parents[1]
+VERSION = json.loads((ROOT / "app/package.json").read_text(encoding="utf-8"))["version"]
+NAME = URL = ""
+
+
+def use_version(version):
+    global VERSION, NAME, URL
+    VERSION = version
+    NAME = f"RVC-Fabric-Setup-{VERSION}.exe"
+    URL = ASSETS + NAME
+
+
+def version_key(value):
+    return tuple(map(int, value.split(".")))
 
 
 def read_json(path):
@@ -64,11 +77,6 @@ def verify_release(directory):
             or platform["signature"] != signed["signature"] or manifest["pub_date"] != signed["pub_date"]
             or checksum != signed["sha256"] + "  " + NAME):
         raise ValueError("The signed Setup and its GitHub release files do not match.")
-    with open_release_url(SITE + "app.json", timeout=30) as response:
-        current = json.load(response)["app"]
-    if (tuple(map(int, current["version"].split("."))) < tuple(map(int, VERSION.split(".")))
-            or (current["version"] == VERSION and current["gui"]["sha256"] != signed["sha256"])):
-        raise ValueError("Update the website to the signed release before updating legacy clients.")
     return signed, manifest, release["publishedAt"]
 
 
@@ -83,7 +91,8 @@ def prepare_catalog(repo, scratch, signed, manifest, published_at):
         if current["sha256"] != signed["sha256"] or current["url"] != URL or old_platform != {"url": URL, "signature": signed["signature"]}:
             raise ValueError("The existing CNB release differs from the signed Setup.")
         return []
-    if current["version"] != "1.7.2" or app["version"] != "1.7.2" or setup["version"] != "1.7.2":
+    if not (version_key(current["version"]) < version_key(VERSION)
+            and app["version"] == current["version"] == setup["version"]):
         raise ValueError("The CNB catalog has changed. Check its release before continuing.")
     date = published_at[:10].replace("-", "")[2:]
     lines = [re.sub(r"^[-*]\s+", "", line.strip()) for line in manifest["notes"].splitlines() if line.strip()]
@@ -165,7 +174,9 @@ def load_cnb_token():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--publish", action="store_true", help="Upload the signed Setup and publish the CNB catalog")
+    parser.add_argument("--version", default=VERSION, help="Release version (default: app/package.json)")
     args = parser.parse_args()
+    use_version(args.version)
     with tempfile.TemporaryDirectory(prefix="rvc-update-") as temp:
         scratch = Path(temp)
         signed, manifest, published_at = verify_release(scratch)
@@ -182,9 +193,9 @@ def main():
         mirror_setup(scratch, signed, previous_fixed_hash)
         if files:
             run(*git, "add", "--", *files, cwd=repo)
-            run(*git, "commit", "-m", "Release RVC Fabric 1.8.0 for existing installations", cwd=repo)
+            run(*git, "commit", "-m", f"Release RVC Fabric {VERSION}", cwd=repo)
             run(*git, "push", "origin", "HEAD:main", cwd=repo)
-        print("CNB provides the final update to RVC Fabric 1.8.0.")
+        print(f"CNB provides RVC Fabric {VERSION}.")
 
 
 if __name__ == "__main__":

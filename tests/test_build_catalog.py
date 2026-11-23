@@ -447,6 +447,22 @@ class CheckFailureTests(unittest.TestCase):
             )
             self.assertEqual(bc.cmd_check(paths), 1)
 
+    def test_installer_entries_use_versioned_cloudflare_urls(self):
+        with tempfile.TemporaryDirectory() as td:
+            paths = make_fixture(Path(td))
+            source = bc.load_sources(paths, bc.Report())
+            source["app"]["gui"].update(package_type="full_package", kind="exe",
+                                       url="https://cnb.cool/old/setup.exe")
+            report = bc.Report()
+            result = bc.compile_catalog(source, paths, report)
+            self.assertEqual(report.errors, [])
+            app = result["index"]["app"]
+            self.assertEqual(app["gui"]["url"], bc.setup_url(app["version"]))
+            setup = result["index"]["packages"]["setup"][0]
+            self.assertEqual(setup["url"], bc.setup_url(setup["version"]))
+            self.assertNotIn("cnb.cool", json.dumps(app))
+            self.assertNotIn("sha256_url", setup)
+
     def test_gui_url_without_sha_fails(self):
         with tempfile.TemporaryDirectory() as td:
             paths = make_fixture(Path(td))

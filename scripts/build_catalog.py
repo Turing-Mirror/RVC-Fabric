@@ -43,6 +43,7 @@ from urllib.parse import parse_qs, urlencode, urlparse, urlsplit, urlunsplit
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from scripts.pack_spec import FABRIC_VOICE_AUTHOR, FABRIC_VOICE_AUTHOR_URL
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
@@ -1284,6 +1285,11 @@ def _validate_shell_versions(app: dict, rep: Report) -> None:
         )
 
 
+def setup_url(version: str) -> str:
+    from release_storage import installer_url
+    return installer_url("rvc-fabric", f"RVC-Fabric-Setup-{version}.exe")
+
+
 def _compile_gui(app: dict, paths: Paths, rep: Report) -> dict:
     gui_src = app.get("gui") if isinstance(app.get("gui"), dict) else {}
     gui: dict[str, Any] = {
@@ -1317,6 +1323,8 @@ def _compile_gui(app: dict, paths: Paths, rep: Report) -> dict:
         size = size or int(art.get("size_bytes") or 0)
     if not url and sha:
         url = cnb_lfs_url(sha)
+    if gui["package_type"] == "full_package" and gui["kind"] == "exe":
+        url = setup_url(gui["version"])
     gui["url"] = url
     gui["sha256"] = sha
     gui["size_bytes"] = size
@@ -1444,6 +1452,8 @@ def compile_catalog(src: dict, paths: Paths, rep: Report) -> Optional[dict]:
 
     setup_src = src.get("setup") or {}
     setup_blob = _compile_blob(setup_src, paths, rep, who="setup", extract_root=".")
+    setup_blob["urls"] = [setup_url(str(setup_src.get("version") or app["version"]))]
+    setup_blob["sha256_urls"] = []
     packages = {
         "setup": [
             _package_row(

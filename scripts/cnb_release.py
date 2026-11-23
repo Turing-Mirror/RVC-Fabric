@@ -1,30 +1,26 @@
-"""Publish a signed RVC Fabric release to the CNB catalog.
+"""Publish signed RVC installers to Cloudflare R2 and push catalog metadata to CNB.
 
-Run it after the GitHub release is public. The website syncs from CNB afterwards.
-The version defaults to app/package.json.
+Run after the GitHub release is public. Both public installer names are verified
+by SHA-256 and size before older versioned installers are deleted. Without
+--publish, only prepare the catalog in a temporary clone.
 """
 import argparse
-import hashlib
 import json
 import os
 from pathlib import Path
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
-from urllib.error import HTTPError
-from urllib.request import Request, urlopen
 
 import yaml
 
-from publish_asset import ensure_release, upload
+from release_storage import R2Publisher, installer_url
 
 
 PRODUCT = "Turing-Mirror/RVC-Fabric"
 CNB = "Turing-Mirror/RVC-Fabric-Releases"
 ORIGIN = f"https://cnb.cool/{CNB}"
-ASSETS = f"{ORIGIN}/-/releases/download/setup/"
 FIXED_NAME = "RVC_Fabric_Setup.exe"
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = json.loads((ROOT / "app/package.json").read_text(encoding="utf-8"))["version"]
@@ -35,7 +31,7 @@ def use_version(version):
     global VERSION, NAME, URL
     VERSION = version
     NAME = f"RVC-Fabric-Setup-{VERSION}.exe"
-    URL = ASSETS + NAME
+    URL = installer_url("rvc-fabric", NAME)
 
 
 def version_key(value):
@@ -48,7 +44,7 @@ def read_json(path):
 
 
 def command_env(args):
-    """CNB_TOKEN only carries release upload rights; git keeps its own sign-in to push."""
+    """Git uses CNB CLI credentials independently from artifact publishing."""
     env = {**os.environ, "GIT_LFS_SKIP_SMUDGE": "1", "PYTHONUTF8": "1"}
     if str(args[0]) == "git":
         env.pop("CNB_TOKEN", None)
@@ -59,11 +55,6 @@ def run(*args, cwd=None, capture=False):
                             stdout=subprocess.PIPE if capture else None,
                             env=command_env(args))
     return result.stdout.strip() if capture else None
-
-
-def open_release_url(url, timeout):
-    request = Request(url, headers={"User-Agent": f"RVC-Fabric/{VERSION}"})
-    return urlopen(request, timeout=timeout)
 
 
 def verify_release(directory):
@@ -96,10 +87,10 @@ def prepare_catalog(repo, scratch, signed, manifest, published_at):
     current = read_json(repo / "index.json")["app"]["gui"]
     if current["version"] == VERSION:
         old_platform = read_json(repo / "updater.json")["platforms"]["windows-x86_64"]
-        if current["sha256"] != signed["sha256"] or current["url"] != URL or old_platform != {"url": URL, "signature": signed["signature"]}:
+        if (current["sha256"] != signed["sha256"] or current["size_bytes"] != signed["size_bytes"]
+                or old_platform["signature"] != signed["signature"]):
             raise ValueError("The existing CNB release differs from the signed Setup.")
-        return []
-    if not (version_key(current["version"]) < version_key(VERSION)
+    if not (version_key(current["version"]) <= version_key(VERSION)
             and app["version"] == current["version"] == setup["version"]):
         raise ValueError("The CNB catalog has changed. Check its release before continuing.")
     date = published_at[:10].replace("-", "")[2:]
@@ -110,7 +101,7 @@ def prepare_catalog(repo, scratch, signed, manifest, published_at):
                   sha256=signed["sha256"], size_bytes=signed["size_bytes"], notes=body)
     app.update(version=VERSION, released=date)
     app["gui"].update(fields, url=URL)
-    setup.update(fields, released=date, file="setup/" + FIXED_NAME, url=ASSETS + FIXED_NAME)
+    setup.update(fields, released=date, url=URL)
     for path, data in [(app_file, app), (setup_file, setup)]:
         path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8")
     for name in (NAME, FIXED_NAME):
@@ -123,8 +114,10 @@ def prepare_catalog(repo, scratch, signed, manifest, published_at):
     if not marker:
         raise ValueError("Missing changelog entries.")
     entry = dict(version=VERSION, date=date, title=VERSION, body=body, highlights=lines)
-    text = text[:marker.end()] + "\n" + yaml.safe_dump([entry], allow_unicode=True, sort_keys=False).rstrip() + text[marker.end():]
-    changes.write_text(text, encoding="utf-8")
+    entries = yaml.safe_load(text)["entries"]
+    if not any(str(item["version"]) == VERSION for item in entries):
+        text = text[:marker.end()] + "\n" + yaml.safe_dump([entry], allow_unicode=True, sort_keys=False).rstrip() + text[marker.end():]
+        changes.write_text(text, encoding="utf-8")
     run(sys.executable, ROOT / "scripts/build_catalog.py", "--cnb", repo,
         "--bundled", scratch / "bundled.json", "build")
     for path in [repo / "index.json", repo / "catalog/online_catalog.snippet.json"]:
@@ -137,51 +130,14 @@ def prepare_catalog(repo, scratch, signed, manifest, published_at):
             relative + ".sha256", "setup/" + FIXED_NAME + ".sha256", "index.json", "catalog/online_catalog.snippet.json", "changelog.json", "updater.json"]
 
 
-def remote_sha256(url):
-    try:
-        with open_release_url(url, timeout=90) as response:
-            return hashlib.file_digest(response, "sha256").hexdigest()
-    except HTTPError as error:
-        if error.code == 404:
-            return None
-        raise
-
-
-def mirror_setup(directory, signed, previous_fixed_hash):
-    release_id = None
-    expected = signed["sha256"]
-    for name in (NAME, FIXED_NAME):
-        url = ASSETS + name
-        current = remote_sha256(url)
-        if current == expected:
-            continue
-        if current is not None and (name != FIXED_NAME or current != previous_fixed_hash):
-            raise ValueError("Unexpected existing CNB file: " + name)
-        if release_id is None:
-            release_id = ensure_release(CNB, "setup", "")
-        path = directory / name
-        if name == FIXED_NAME:
-            shutil.copyfile(directory / NAME, path)
-        uploaded = upload(CNB, release_id, path)
-        if uploaded["sha256"] != expected or remote_sha256(url) != expected:
-            raise ValueError("The CNB download does not match the signed Setup: " + name)
-
-
-def load_cnb_token():
-    if os.environ.get("CNB_TOKEN"):
-        return
-    token_file = Path.home() / ".cnb" / "agent-token"
-    if not token_file.is_file():
-        return
-    line = token_file.read_text(encoding="utf-8-sig").strip()
-    assignment = re.fullmatch(r"""(?:export\s+)?CNB_TOKEN\s*=\s*(['"]?)([^'"\s]+)\1""", line)
-    if assignment:
-        os.environ["CNB_TOKEN"] = assignment.group(2)
+def mirror_setup(directory, signed):
+    R2Publisher("rvc-fabric", "RVC-Fabric-Setup-", FIXED_NAME).publish(
+        directory / NAME, VERSION, signed["sha256"], signed["size_bytes"])
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--publish", action="store_true", help="Upload the signed Setup and publish the CNB catalog")
+    parser.add_argument("--publish", action="store_true", help="Publish installers to R2 and push catalog metadata to CNB")
     parser.add_argument("--version", default=VERSION, help="Release version (default: app/package.json)")
     args = parser.parse_args()
     use_version(args.version)
@@ -189,21 +145,18 @@ def main():
         scratch = Path(temp)
         signed, manifest, published_at = verify_release(scratch)
         repo = scratch / "catalog"
-        if args.publish:
-            load_cnb_token()
         git = ("git", "-c", "credential.helper=", "-c", "credential.helper=!cnb git-credential")
         run(*git, "clone", "--depth", "1", "--branch", "main", ORIGIN, repo)
-        previous_fixed_hash = (repo / "setup" / (FIXED_NAME + ".sha256")).read_text(encoding="ascii").split()[0]
         files = prepare_catalog(repo, scratch, signed, manifest, published_at)
         if not args.publish:
             print("Checked the signed release and prepared the CNB catalog locally.")
             return
-        mirror_setup(scratch, signed, previous_fixed_hash)
-        if files:
-            run(*git, "add", "--", *files, cwd=repo)
+        mirror_setup(scratch, signed)
+        run(*git, "add", "--", *files, cwd=repo)
+        if run(*git, "diff", "--cached", "--name-only", cwd=repo, capture=True):
             run(*git, "commit", "-m", f"Release RVC Fabric {VERSION}", cwd=repo)
             run(*git, "push", "origin", "HEAD:main", cwd=repo)
-        print(f"CNB provides RVC Fabric {VERSION}.")
+        print(f"Cloudflare provides RVC Fabric {VERSION}; catalog metadata is published on CNB.")
 
 
 if __name__ == "__main__":

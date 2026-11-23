@@ -18,7 +18,7 @@
 
 确认更新说明后，在草稿里点 **Publish release**。
 
-## 4. 发布到 CNB
+## 4. 发布到 Cloudflare 与 CNB 清单仓
 
 在源码根目录运行：
 
@@ -26,9 +26,11 @@
 python scripts/cnb_release.py --publish
 ```
 
-版本号默认读取 `app/package.json`，也可以用 `--version` 指定。脚本读取 GitHub 上已公开的 Release，核对签名与 SHA-256，把同一份 Setup 以版本化文件名和固定文件名 `RVC_Fabric_Setup.exe` 上传到 CNB 的 `setup` 标签，再更新清单、更新日志和 `updater.json` 并推送 CNB 发布仓。省略 `--publish` 只在临时目录演练。
+版本号默认读取 `app/package.json`，也可以用 `--version` 指定。脚本核对已公开 GitHub Release 的签名与 SHA-256，把版本化安装包和固定名 `RVC_Fabric_Setup.exe` 上传到 Cloudflare R2 的 `trm-releases/rvc-fabric/`。两份 CDN 下载均通过 SHA-256 与大小检查后，删除同前缀中的旧版本化安装包。安装包清单使用 `https://cdn.turingmirror.com/f/rvc-fabric/` 下的版本化地址。
 
-需要 Python 3.11 或更高版本、PyYAML、Node.js、Git、GitHub CLI 和 CNB CLI。CNB 令牌需要 `repo-release:rw` 权限。脚本先读 `CNB_TOKEN`，这台电脑也可沿用 `~/.cnb/agent-token`。中途断线可以重复运行。
+清单源、index、更新日志和 updater 仍提交并推送 CNB 发布仓。省略 `--publish` 只在临时目录演练；同版本重跑可迁移地址，不重复写入更新日志。
+
+需要 Python 3.11 或更高版本、PyYAML、Node.js、Git、GitHub CLI、CNB CLI 和 Wrangler。CNB Git 推送继续使用 CNB CLI 的凭据；R2 复用 Wrangler 登录或 Cloudflare 环境变量。多个 Cloudflare 账户时设置 `CLOUDFLARE_ACCOUNT_ID`，也可用 `TRM_WRANGLER` 指定 CLI。中途断线可以重复运行。
 
 ## 5. 同步官网
 

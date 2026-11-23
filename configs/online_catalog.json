@@ -1,17 +1,17 @@
 {
   "schema": 1,
   "app": {
-    "version": "1.7.2",
+    "version": "1.8.1",
     "channel": "stable",
     "gui": {
       "package_type": "full_package",
-      "version": "1.7.2",
+      "version": "1.8.1",
       "kind": "exe",
-      "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/setup/RVC_Fabric_Setup.exe",
-      "sha256": "2011d6db7f875451956f2a692bb8063900762be83485884d6fc517adf68175a3",
-      "size_bytes": 12543071,
+      "url": "https://cdn.turingmirror.com/f/rvc-fabric/RVC-Fabric-Setup-1.8.1.exe",
+      "sha256": "83534c86053783eb7e2c9544c7b4aef545b7a93dd86d8bea48a94cc2915e6351",
+      "size_bytes": 25085336,
       "min_app_version": "1.3.0",
-      "notes": "1.7.2 统一界面组件和交互动效，改进顶部分段拖动、列表分页、菜单和弹窗的操作反馈。工具窗口最大化时按屏幕工作区调整，表单随窗口展开，还原后恢复原来的位置和大小。模型页保留手动选择的 RVC 或 DSP 页面；语音转换把录音目录作为一条来源，可修改录音保存位置。安装时更换目录可迁移用户数据及已下载组件；机械硬盘读盘较慢时会提示使用固态硬盘。说明页支持搜索全部问答和名词，更新八种语言文案及 DSP 预设说明，并修复重启后训练音色封面无法读取的问题。"
+      "notes": "运行环境、音频工具和社区资源包下载支持收起到左下角后台进行，不阻塞页面切换。\n社区资源下载失败时显示具体原因，并通知服务器尽快重新检查该资源。\n社区公告和更新日志改为压缩传输，网络较慢时更容易加载完成。\n修复独立窗口与部分文案问题，统一窗口操作配色。"
     }
   },
   "community": {

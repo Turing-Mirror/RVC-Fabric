@@ -1,17 +1,17 @@
 {
   "schema": 1,
   "app": {
-    "version": "1.8.1",
+    "version": "1.8.2",
     "channel": "stable",
     "gui": {
       "package_type": "full_package",
-      "version": "1.8.1",
+      "version": "1.8.2",
       "kind": "exe",
-      "url": "https://cdn.turingmirror.com/f/rvc-fabric/RVC-Fabric-Setup-1.8.1.exe",
-      "sha256": "83534c86053783eb7e2c9544c7b4aef545b7a93dd86d8bea48a94cc2915e6351",
-      "size_bytes": 25085336,
+      "url": "https://cdn.turingmirror.com/f/rvc-fabric/RVC-Fabric-Setup-1.8.2.exe",
+      "sha256": "6a20f255d11c56d1882e9c74931ac52e51fe2cbc6282688f4b65056fda675c16",
+      "size_bytes": 25122935,
       "min_app_version": "1.3.0",
-      "notes": "运行环境、音频工具和社区资源包下载支持收起到左下角后台进行，不阻塞页面切换。\n社区资源下载失败时显示具体原因，并通知服务器尽快重新检查该资源。\n社区公告和更新日志改为压缩传输，网络较慢时更容易加载完成。\n修复独立窗口与部分文案问题，统一窗口操作配色。"
+      "notes": "修复社区「全部」列表未按收录日期排序的问题。\n运行环境新增下载地址，无法访问时自动切换至备用地址。\n安装包和更新改在图灵镜官网提供下载。"
     }
   },
   "community": {
@@ -73,6 +73,7 @@
           "size_bytes": 6077133824,
           "sha256": "d76ac4e8140490bda1abac8df2718bfec95f8a696c8a5ba730a5e7e901421d9b",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/19fad1f49c58719c3a15f78f277e9755f5732c17/fabric/runtime/runtime-nvidia-2026.07.21.tar",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/RVC-runtime/runtime-nvidia-2026.07.21.tar"
           ],
           "sha256_urls": [
@@ -96,6 +97,7 @@
           "size_bytes": 1801268224,
           "sha256": "5d5e4437c70ac1cf368232829381170d5a88f457eed20d14d35b1ef155dd0274",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/19fad1f49c58719c3a15f78f277e9755f5732c17/fabric/runtime/runtime-amd-2026.07.21.tar",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/RVC-runtime/runtime-amd-2026.07.21.tar"
           ],
           "sha256_urls": [
@@ -119,6 +121,7 @@
           "size_bytes": 6698774016,
           "sha256": "a828e13e23589447f25b16b9314b6d730a1a7701e973613bc97d80a026102489",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/9a0685e5c794f2a183561dddacfd94f23cf0eef7/fabric/runtime/runtime-nvidia50-2026.07.21.tar",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/RVC-runtime/runtime-nvidia50-2026.07.21.tar"
           ],
           "sha256_urls": [

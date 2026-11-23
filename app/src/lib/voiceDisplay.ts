@@ -74,6 +74,12 @@ export function voiceReleaseDate(date?: unknown): string {
   return [y.length === 2 ? "20" + y : y, m, day].join("-");
 }
 
+/** Newest first across both formats; the raw value only breaks same-day ties. */
+export function compareVoiceDateDesc(a?: unknown, b?: unknown): number {
+  return voiceReleaseDate(b).localeCompare(voiceReleaseDate(a))
+    || str(b).localeCompare(str(a));
+}
+
 export function voiceVersionLabel(date?: unknown): string {
   const releaseDate = voiceReleaseDate(date);
   return releaseDate ? "v" + releaseDate.slice(2).replace(/-/g, ".") : "";

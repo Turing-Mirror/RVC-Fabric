@@ -34,6 +34,7 @@ import { CatalogCover, Collapse, useDir, useMenu, usePageActive, usePaneOn, type
 import { resolveCover, useCoverCache } from "../lib/cover";
 import { t, getTLocale } from "../i18n/t";
 import {
+  compareVoiceDateDesc,
   compareVoiceGroups,
   displayVoiceAuthor,
   displayVoiceFieldForGroup,
@@ -261,7 +262,7 @@ export function StoreSection({ reloadToken, onInstalled, onAuthor, onOpenModel, 
     }
     // 一律按收录日期倒序。分组视图也排，这样每个系列内部顺序是稳定的。
     if (assetId) base = base.filter((voice) => voice.id === assetId);
-    base.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+    base.sort((a, b) => compareVoiceDateDesc(a.date, b.date));
     if (hideInstalled) base = base.filter((v) => !v.installed || v.update_available);
     const qq = q.trim().toLowerCase();
     if (qq) {

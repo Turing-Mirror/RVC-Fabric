@@ -4,10 +4,20 @@ import {
   displayVoiceAuthor,
   displayVoiceFieldForGroup,
   voiceAuthorList,
+  compareVoiceDateDesc,
   voiceVersionLabel,
 } from "./voiceDisplay";
 
 afterEach(() => setTLocale("zh-CN"));
+
+describe("compareVoiceDateDesc", () => {
+  it("puts newer Community releases before older compact catalog dates", () => {
+    const dates = ["261019", "2026-11-16T10:21:00.296Z", "260723", "2026-11-16T09:00:00Z"];
+    expect(dates.sort(compareVoiceDateDesc)).toEqual(
+      ["2026-11-16T10:21:00.296Z", "2026-11-16T09:00:00Z", "261019", "260723"],
+    );
+  });
+});
 
 describe("voiceVersionLabel", () => {
   it("formats catalog YYMMDD as vYY.MM.DD", () => {

@@ -398,6 +398,7 @@ async fn resume_one_url(
         .user_agent(UA)
         .connect_timeout(Duration::from_secs(15))
         .read_timeout(FIRST_BYTE_TIMEOUT)
+        .redirect(reqwest::redirect::Policy::limited(10))
         .build()
         .map_err(|e| format!("client: {e}"))?;
 
@@ -542,6 +543,16 @@ pub(crate) fn file_sha256(path: &Path) -> Result<String, String> {
     Ok(hex::encode(hasher.finalize()))
 }
 
+fn verify_download(path: &Path, sha256: &str, expected_size: u64) -> Result<(), String> {
+    if expected_size > 0 {
+        let size = path.metadata().map_err(|e| e.to_string())?.len();
+        if size != expected_size {
+            return Err(format!("download: size mismatch (expected {expected_size}, got {size})"));
+        }
+    }
+    verify_sha256(path, sha256)
+}
+
 /// Options for a single product download (Runtime / voice / patch).
 #[derive(Clone)]
 pub struct DownloadRequest {
@@ -668,13 +679,14 @@ pub fn download_request(
     if req.urls.is_empty() {
         return Err(crate::i18n::t("s.d08e45e275").into());
     }
+    let expected_size = if matches!(req.kind, DownloadKind::Runtime) { req.size_hint } else { 0 };
     if let Some(parent) = req.dest.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
 
     // Already complete + verified
     if req.dest.is_file() && !req.expected_sha256.is_empty() {
-        if verify_sha256(&req.dest, &req.expected_sha256).is_ok() {
+        if verify_download(&req.dest, &req.expected_sha256, expected_size).is_ok() {
             if let Some(ref cb) = progress {
                 let len = req.dest.metadata().map(|m| m.len()).unwrap_or(0);
                 cb(len, len, "download");
@@ -723,9 +735,9 @@ pub fn download_request(
 
     let rt = shared_runtime();
 
-    // 选源：并发探一轮，谁先回应谁排第一。串行等超时的老做法在三个源都卡的
-    // 时候要一分钟才轮到第一次重试。
-    let urls = probe_order(&req.urls, &cancel);
+    // Runtime mirrors follow catalog priority, including resumed downloads.
+    let ordered = matches!(req.kind, DownloadKind::Runtime);
+    let urls = if ordered { req.urls.clone() } else { probe_order(&req.urls, &cancel) };
 
     let mut last_err = String::new();
     let mut unavailable = Vec::new();
@@ -739,7 +751,11 @@ pub fn download_request(
         let len_at_round_start = std::fs::metadata(&part_path).map(|m| m.len()).unwrap_or(0);
         // 钉住的源得在这里快照下来 —— resume_url 会随尝试被改写，循环里比不了。
         let pinned_this_round = resume_url.clone();
-        let round_urls = pin_resume_first(urls.clone(), &pinned_this_round, pinned_stalls);
+        let round_urls = if ordered {
+            urls.clone()
+        } else {
+            pin_resume_first(urls.clone(), &pinned_this_round, pinned_stalls)
+        };
         for url in &round_urls {
             if unavailable.contains(url) {
                 continue;
@@ -790,7 +806,7 @@ pub fn download_request(
                 let first = resume();
                 if offset > 0 && first.as_ref().is_err_and(|e| e == "resume: status 416") {
                     if !req.expected_sha256.is_empty()
-                        && verify_sha256(&part_path, &req.expected_sha256).is_ok()
+                        && verify_download(&part_path, &req.expected_sha256, expected_size).is_ok()
                     {
                         Ok(())
                     } else {
@@ -827,7 +843,7 @@ pub fn download_request(
                             let len = part_path.metadata().map(|m| m.len()).unwrap_or(0);
                             cb(len, len.max(1), "verify");
                         }
-                        if let Err(e) = verify_sha256(&part_path, &req.expected_sha256) {
+                        if let Err(e) = verify_download(&part_path, &req.expected_sha256, expected_size) {
                             // 拿到的东西不对，续传更没意义 —— 整个丢掉换下一个源。
                             let _ = std::fs::remove_file(&part_path);
                             let _ = std::fs::remove_file(&tag_path);
@@ -889,7 +905,7 @@ pub fn download_request(
                     }
                     // Give a working stream the next retry before trying a slower mirror.
                     last_err = e;
-                    if transient
+                    if !ordered && transient
                         && (made_progress
                             || (offset > 0 && pinned_this_round == *url && pinned_stalls < 2))
                     {
@@ -1024,6 +1040,144 @@ async fn wait_first_byte_or_timeout(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn mirror_fixture(
+        responses: Vec<(&'static str, String, Duration)>,
+    ) -> (String, std::thread::JoinHandle<()>) {
+        use std::io::{BufRead, BufReader, Write};
+        use std::net::{Ipv4Addr, TcpListener};
+
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let address = listener.local_addr().unwrap();
+        let base = format!("http://{address}");
+        let thread = std::thread::spawn(move || {
+            for (path, response, delay) in responses {
+                let start = std::time::Instant::now();
+                let mut stream = loop {
+                    match listener.accept() {
+                        Ok((stream, _)) => break stream,
+                        Err(error) if error.kind() == std::io::ErrorKind::WouldBlock
+                            && start.elapsed() < Duration::from_secs(5) => {
+                            std::thread::sleep(Duration::from_millis(10));
+                        }
+                        Err(error) => panic!("missing request {path}: {error}"),
+                    }
+                };
+                stream.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+                let mut reader = BufReader::new(&stream);
+                let mut first = String::new();
+                reader.read_line(&mut first).unwrap();
+                assert_eq!(first.split_whitespace().nth(1), Some(path));
+                loop {
+                    let mut line = String::new();
+                    reader.read_line(&mut line).unwrap();
+                    if line == "\r\n" || line.is_empty() { break; }
+                    let lower = line.to_ascii_lowercase();
+                    assert!(!["authorization:", "cookie:", "proxy-authorization:"]
+                        .iter().any(|header| lower.starts_with(header)));
+                }
+                std::thread::sleep(delay);
+                let response = response.replace("{cdn}", &format!("http://localhost:{}/cdn", address.port()));
+                // A deliberately timed-out request may already have closed its socket.
+                let _ = stream.write_all(response.as_bytes());
+            }
+        });
+        (base, thread)
+    }
+
+    fn mirror_request(base: &str, paths: &[&str], tag: &str) -> DownloadRequest {
+        DownloadRequest {
+            urls: paths.iter().map(|path| format!("{base}{path}")).collect(),
+            root: None,
+            dest: crate::testutil::scratch(tag).join("runtime.tar"),
+            expected_sha256: format!("{:x}", Sha256::digest(b"hello fabric")),
+            size_hint: 12,
+            connections: Some(1),
+            kind: DownloadKind::Runtime,
+        }
+    }
+
+    #[test]
+    fn mirrors_follow_catalog_order_through_http_errors_hash_errors_and_redirects() {
+        let empty = Duration::ZERO;
+        let (base, server) = mirror_fixture(vec![
+            ("/403", "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".into(), empty),
+            ("/404", "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".into(), empty),
+            ("/503", "HTTP/1.1 503 Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".into(), empty),
+            ("/bad-hash", "HTTP/1.1 200 OK\r\nContent-Length: 12\r\nConnection: close\r\n\r\nwrong fabric".into(), empty),
+            ("/bad-size", "HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\nshort".into(), empty),
+            ("/redirect", "HTTP/1.1 302 Found\r\nLocation: {cdn}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".into(), empty),
+            ("/cdn", "HTTP/1.1 200 OK\r\nContent-Length: 12\r\nConnection: close\r\n\r\nhello fabric".into(), empty),
+        ]);
+        let req = mirror_request(&base, &["/403", "/404", "/503", "/bad-hash", "/bad-size", "/redirect", "/unused"], "mirror-order");
+        let dest = req.dest.clone();
+        let result = download_request(req, Arc::new(AtomicBool::new(false)), None);
+        server.join().unwrap();
+        result.unwrap();
+        assert_eq!(std::fs::read(&dest).unwrap(), b"hello fabric");
+        std::fs::remove_dir_all(dest.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn first_byte_timeout_tries_the_next_catalog_url() {
+        let (base, server) = mirror_fixture(vec![
+            ("/timeout", String::new(), FIRST_BYTE_TIMEOUT + Duration::from_millis(100)),
+            ("/next", "HTTP/1.1 200 OK\r\nContent-Length: 12\r\nConnection: close\r\n\r\nhello fabric".into(), Duration::ZERO),
+        ]);
+        let req = mirror_request(&base, &["/timeout", "/next"], "mirror-timeout");
+        let dest = req.dest.clone();
+        let result = download_request(req, Arc::new(AtomicBool::new(false)), None);
+        server.join().unwrap();
+        result.unwrap();
+        assert_eq!(std::fs::read(&dest).unwrap(), b"hello fabric");
+        std::fs::remove_dir_all(dest.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn resumed_fallback_does_not_override_catalog_priority() {
+        let (base, server) = mirror_fixture(vec![
+            ("/first", "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".into(), Duration::ZERO),
+            ("/resume", "HTTP/1.1 206 Partial Content\r\nContent-Length: 7\r\nContent-Range: bytes 5-11/12\r\nConnection: close\r\n\r\n fabric".into(), Duration::ZERO),
+        ]);
+        let req = mirror_request(&base, &["/first", "/resume"], "mirror-priority");
+        let dest = req.dest.clone();
+        std::fs::create_dir_all(dest.parent().unwrap()).unwrap();
+        std::fs::write(suffixed(&dest, ".part"), b"hello").unwrap();
+        std::fs::write(suffixed(&dest, ".part.src"), &req.urls[1]).unwrap();
+        let result = download_request(req, Arc::new(AtomicBool::new(false)), None);
+        server.join().unwrap();
+        result.unwrap();
+        assert_eq!(std::fs::read(&dest).unwrap(), b"hello fabric");
+        std::fs::remove_dir_all(dest.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn interrupted_stream_switches_mirror_and_keeps_verified_prefix() {
+        let (base, server) = mirror_fixture(vec![
+            ("/drop", "HTTP/1.1 200 OK\r\nContent-Length: 12\r\nConnection: close\r\n\r\nhello".into(), Duration::ZERO),
+            ("/next", "HTTP/1.1 206 Partial Content\r\nContent-Length: 7\r\nContent-Range: bytes 5-11/12\r\nConnection: close\r\n\r\n fabric".into(), Duration::ZERO),
+        ]);
+        let req = mirror_request(&base, &["/drop", "/next"], "mirror-partial");
+        let dest = req.dest.clone();
+        let result = download_request(req, Arc::new(AtomicBool::new(false)), None);
+        server.join().unwrap();
+        result.unwrap();
+        assert_eq!(std::fs::read(&dest).unwrap(), b"hello fabric");
+        std::fs::remove_dir_all(dest.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn catalog_size_is_checked_even_with_a_valid_checksum() {
+        let path = crate::testutil::scratch("download-size");
+        std::fs::write(&path, b"hello fabric").unwrap();
+        let sha = format!("{:x}", Sha256::digest(b"hello fabric"));
+        assert!(verify_download(&path, &sha, 13).unwrap_err().contains("size mismatch"));
+        assert!(verify_download(&path, &sha, 12).is_ok());
+        assert!(verify_download(&path, &"0".repeat(64), 12).is_err());
+        std::fs::remove_file(path).unwrap();
+    }
+
 
     #[test]
     fn setup_download_resumes_after_the_first_connection_drops() {

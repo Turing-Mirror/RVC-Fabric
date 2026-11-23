@@ -78,7 +78,7 @@ VALID_CHANNELS = ("release", "lfs")
 def default_cnb_dir() -> Path:
     """发布仓工作区的位置。
 
-    优先级：环境变量 RVCF_CNB_DIR → 与产品仓同级的 RVC-Fabric-Release →
+    优先级：环境变量 RVCF_CNB_DIR → 与产品仓同级的 RVC-Fabric-Releases（兼容旧目录名）→
     仓内旧位置 CNB-GIT-RELEASE。
 
     发布仓现在独立放在产品仓旁边，不再塞进产品仓目录里。默认值写死成仓内路径
@@ -88,9 +88,10 @@ def default_cnb_dir() -> Path:
     env = os.environ.get("RVCF_CNB_DIR")
     if env:
         return Path(env).expanduser()
-    sibling = REPO.parent / "RVC-Fabric-Release"
-    if (sibling / ".git").exists():
-        return sibling
+    for name in ("RVC-Fabric-Releases", "RVC-Fabric-Release"):
+        sibling = REPO.parent / name
+        if (sibling / ".git").exists():
+            return sibling
     return REPO / "CNB-GIT-RELEASE"
 
 
@@ -947,6 +948,8 @@ def _compile_runtime(
         rep.error(f"{who}: 缺 parts")
         return None
     parts = []
+    mirror_path = paths.cnb / "catalog" / "modelscope.json"
+    mirrors = json.loads(mirror_path.read_text(encoding="utf-8"))["files"] if mirror_path.is_file() else {}
     for i, p in enumerate(parts_src):
         art = _resolve_artifact(
             dict(p),
@@ -956,6 +959,8 @@ def _compile_runtime(
             channel=channel,
             release_tag=release_tag,
         )
+        if mirror := mirrors.get(art["sha256"].lower()):
+            art["urls"] = [mirror, *(u for u in art["urls"] if u != mirror)]
         parts.append(
             {
                 "name": art["name"],

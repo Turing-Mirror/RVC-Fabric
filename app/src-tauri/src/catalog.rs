@@ -206,6 +206,25 @@ pub fn fetch_remote_catalog(timeout_secs: u64) -> Result<Value, String> {
     Err(crate::i18n::te("s.af72a27185", &errors.into_iter().take(3).collect::<Vec<_>>().join(" | ")))
 }
 
+/// Preserve catalog priority and append built-in addresses only as fallbacks.
+pub(crate) fn download_urls(blob: &Value, fallback: Vec<String>) -> Vec<String> {
+    let mut urls = Vec::new();
+    match blob.get("urls").or_else(|| blob.get("url")) {
+        Some(Value::String(url)) => urls.push(url.trim().to_string()),
+        Some(Value::Array(values)) => urls.extend(
+            values.iter().filter_map(Value::as_str).map(|url| url.trim().to_string()),
+        ),
+        _ => {}
+    }
+    urls.retain(|url| !url.is_empty());
+    for url in fallback {
+        if !url.is_empty() && !urls.contains(&url) {
+            urls.push(url);
+        }
+    }
+    urls
+}
+
 fn normalize_part(
     part: &Value,
     variant: &str,
@@ -234,45 +253,14 @@ fn normalize_part(
         ch = default_channel(variant).into();
     }
 
-    let mut urls: Vec<String> = Vec::new();
-    match part.get("urls").or_else(|| part.get("url")) {
-        Some(Value::String(s)) if !s.trim().is_empty() => urls.push(s.trim().to_string()),
-        Some(Value::Array(arr)) => {
-            for u in arr {
-                if let Some(s) = u.as_str() {
-                    if !s.trim().is_empty() {
-                        urls.push(s.trim().to_string());
-                    }
-                }
-            }
-        }
-        _ => {}
-    }
-
-    if urls.is_empty() {
-        if ch == "lfs" && sha.len() == 64 {
-            urls.push(lfs_url(&sha));
-        } else if !name.is_empty() {
-            urls.push(release_url(release_tag, &name));
-        }
-    } else if ch == "lfs" {
-        urls.retain(|u| u.contains("/-/lfs/") || u.contains("/-/git/raw/"));
-        if sha.len() == 64 {
-            let lfs = lfs_url(&sha);
-            if !urls.iter().any(|u| u == &lfs) {
-                urls.insert(0, lfs);
-            }
-        }
+    let fallback = if ch == "lfs" && sha.len() == 64 {
+        vec![lfs_url(&sha)]
+    } else if !name.is_empty() {
+        vec![release_url(release_tag, &name)]
     } else {
-        let mut release: Vec<String> = urls
-            .into_iter()
-            .filter(|u| u.contains("/-/releases/download/") || u.contains("/releases/download/"))
-            .collect();
-        if release.is_empty() && !name.is_empty() {
-            release.push(release_url(release_tag, &name));
-        }
-        urls = release;
-    }
+        Vec::new()
+    };
+    let urls = download_urls(part, fallback);
 
     if urls.is_empty() {
         return None;
@@ -448,6 +436,28 @@ fn _raw_main() -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn runtime_mirrors_keep_catalog_order_for_both_channels() {
+        let mirror = "https://modelscope.cn/models/Kara251/runtime/resolve/commit/runtime.tar";
+        let cdn = "https://cdn.modelscope.cn/runtime.tar";
+        for channel in ["release", "lfs"] {
+            let sha = "a".repeat(64);
+            let fallback = if channel == "lfs" { lfs_url(&sha) } else { release_url(DEFAULT_RELEASE_TAG, "runtime.tar") };
+            let data = serde_json::json!({"runtimes": {"nvidia": {
+                "channel": channel, "release_tag": DEFAULT_RELEASE_TAG,
+                "parts": [{"name": "runtime.tar", "sha256": sha, "size_bytes": 12,
+                           "urls": [mirror, cdn, fallback]}]
+            }}});
+            let part = parse_spec("nvidia", &data).part;
+            assert_eq!(part.urls, vec![mirror, cdn, fallback.as_str()]);
+            assert_eq!(part.sha256, sha);
+            assert_eq!(part.size_bytes, 12);
+            let mut missing_fallback = data.clone();
+            missing_fallback["runtimes"]["nvidia"]["parts"][0]["urls"] = serde_json::json!([mirror, cdn]);
+            assert_eq!(parse_spec("nvidia", &missing_fallback).part.urls, part.urls);
+        }
+    }
 
     #[test]
     fn cache_bust_adds_a_timestamp_query() {

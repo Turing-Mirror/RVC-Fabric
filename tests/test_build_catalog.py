@@ -13,6 +13,7 @@ import json
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -127,6 +128,68 @@ def make_fixture(tmp: Path) -> "bc.Paths":
          "cover": "ch-banner/tomori.jpg"},
     )
     return paths
+
+
+class ModelScopeRuntimeTests(unittest.TestCase):
+    def test_default_release_directory_matches_the_current_checkout_name(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            current = root / "RVC-Fabric-Releases"
+            legacy = root / "RVC-Fabric-Release"
+            for path in (current, legacy):
+                (path / ".git").mkdir(parents=True)
+            with patch.object(bc, "REPO", root / "RVC-Fabric"), patch.dict(bc.os.environ, {"RVCF_CNB_DIR": ""}):
+                self.assertEqual(bc.default_cnb_dir(), current)
+                (current / ".git").rmdir()
+                self.assertEqual(bc.default_cnb_dir(), legacy)
+
+    def test_mapping_changes_only_runtime_parts_and_preserves_checksums(self):
+        with tempfile.TemporaryDirectory() as td:
+            paths = make_fixture(Path(td))
+            rep = bc.Report()
+            src = bc.load_sources(paths, rep)
+            before = bc.compile_catalog(src, paths, rep)
+            # Include unrelated artifacts in the mapping: they must stay unchanged.
+            mirrors = {}
+            for section in ("engine_core", "vbcable"):
+                sha = before["index"][section]["sha256"]
+                mirrors[sha] = f"https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/commit/{sha}"
+            for variant in ("nvidia", "amd"):
+                sha = before["index"]["runtimes"][variant]["parts"][0]["sha256"]
+                mirrors[sha] = f"https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/commit/{variant}"
+            path = paths.cnb / "catalog" / "modelscope.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps({"repo": "Kara251/kara-rvc-model", "files": mirrors}), encoding="utf-8")
+            after = bc.compile_catalog(src, paths, rep)
+            self.assertEqual(rep.errors, [])
+            for output in ("index", "snippet", "bundled"):
+                for variant in ("nvidia", "amd"):
+                    old = before[output]["runtimes"][variant]["parts"][0]
+                    new = after[output]["runtimes"][variant]["parts"][0]
+                    self.assertEqual(new["urls"], [mirrors[old["sha256"]], *old["urls"]])
+                    self.assertEqual(new["sha256"], old["sha256"])
+                    self.assertEqual(new["size_bytes"], old["size_bytes"])
+                self.assertEqual(after[output]["runtimes"]["nvidia50"], before[output]["runtimes"]["nvidia50"])
+            for section in ("engine_core", "vbcable", "app", "voices", "extras"):
+                self.assertEqual(after["index"][section], before["index"][section])
+
+    def test_every_part_is_mapped_without_duplicate_urls(self):
+        with tempfile.TemporaryDirectory() as td:
+            paths = make_fixture(Path(td))
+            mirror = "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/commit/part"
+            path = paths.cnb / "catalog" / "modelscope.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps({"files": {"a" * 64: mirror}}), encoding="utf-8")
+            rep = bc.Report()
+            src = {"channel": "release", "parts": [
+                {"name": name, "sha256": "a" * 64, "size_bytes": 12, "urls": [mirror, "https://cnb.cool/fallback"]}
+                for name in ("part1.tar", "part2.tar")
+            ]}
+            result = bc._compile_runtime("nvidia", src, paths, rep)
+            self.assertEqual(rep.errors, [])
+            self.assertEqual(len(result["parts"]), 2)
+            for part in result["parts"]:
+                self.assertEqual(part["urls"], [mirror, "https://cnb.cool/fallback"])
 
 
 class BuildOutputsTests(unittest.TestCase):

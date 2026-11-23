@@ -195,6 +195,8 @@ pub fn fetch_remote_catalog(timeout_secs: u64) -> Result<Value, String> {
         let u = with_cache_bust(url);
         match http_get_json_ex(&u, timeout_secs, true) {
             Ok(v) if v.is_object() => {
+                #[cfg(test)]
+                crate::logging::shell_log!(format!("catalog source {url}"));
                 *CATALOG_MEMO.lock().unwrap_or_else(|e| e.into_inner()) =
                     Some((Instant::now(), v.clone()));
                 return Ok(v);

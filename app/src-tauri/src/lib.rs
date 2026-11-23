@@ -29,6 +29,9 @@ mod crash;
 mod device_watch;
 mod disk_kind;
 mod download;
+#[cfg(test)]
+#[path = "../tests/support/e2e_modelscope_runtime.rs"]
+mod e2e_modelscope_runtime;
 mod dsp;
 mod engine_assets;
 mod extra_assets;

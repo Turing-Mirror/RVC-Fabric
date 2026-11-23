@@ -1,0 +1,120 @@
+{
+  "completed_at": "2026-11-23T19:33:15.758898900+00:00",
+  "product_version": "1.8.2",
+  "results": [
+    {
+      "check": "catalog",
+      "evidence": {
+        "runtimes": [
+          {
+            "name": "runtime-amd-2026.07.21.tar",
+            "sha256": "5d5e4437c70ac1cf368232829381170d5a88f457eed20d14d35b1ef155dd0274",
+            "size_bytes": 1801268224,
+            "urls": [
+              "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/19fad1f49c58719c3a15f78f277e9755f5732c17/fabric/runtime/runtime-amd-2026.07.21.tar",
+              "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/RVC-runtime/runtime-amd-2026.07.21.tar"
+            ],
+            "variant": "amd"
+          },
+          {
+            "name": "runtime-nvidia-2026.07.21.tar",
+            "sha256": "d76ac4e8140490bda1abac8df2718bfec95f8a696c8a5ba730a5e7e901421d9b",
+            "size_bytes": 6077133824,
+            "urls": [
+              "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/19fad1f49c58719c3a15f78f277e9755f5732c17/fabric/runtime/runtime-nvidia-2026.07.21.tar",
+              "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/RVC-runtime/runtime-nvidia-2026.07.21.tar"
+            ],
+            "variant": "nvidia"
+          },
+          {
+            "name": "runtime-nvidia50-2026.07.21.tar",
+            "sha256": "a828e13e23589447f25b16b9314b6d730a1a7701e973613bc97d80a026102489",
+            "size_bytes": 6698774016,
+            "urls": [
+              "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/9a0685e5c794f2a183561dddacfd94f23cf0eef7/fabric/runtime/runtime-nvidia50-2026.07.21.tar",
+              "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/RVC-runtime/runtime-nvidia50-2026.07.21.tar"
+            ],
+            "variant": "nvidia50"
+          }
+        ],
+        "source": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/git/raw/main/index.json"
+      },
+      "pass": true
+    },
+    {
+      "check": "range_nvidia",
+      "evidence": {
+        "bytes": 1024,
+        "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/d7/6a/c4e8140490bda1abac8df2718bfec95f8a696c8a5ba730a5e7e901421d9b",
+        "range": "bytes 0-1023/6077133824",
+        "status": 206,
+        "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/19fad1f49c58719c3a15f78f277e9755f5732c17/fabric/runtime/runtime-nvidia-2026.07.21.tar",
+        "variant": "nvidia"
+      },
+      "pass": true
+    },
+    {
+      "check": "range_nvidia50",
+      "evidence": {
+        "bytes": 1024,
+        "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/a8/28/e13e23589447f25b16b9314b6d730a1a7701e973613bc97d80a026102489",
+        "range": "bytes 0-1023/6698774016",
+        "status": 206,
+        "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/9a0685e5c794f2a183561dddacfd94f23cf0eef7/fabric/runtime/runtime-nvidia50-2026.07.21.tar",
+        "variant": "nvidia50"
+      },
+      "pass": true
+    },
+    {
+      "check": "fallback",
+      "evidence": {
+        "bytes": 4209408,
+        "cancel_threshold": 4194304,
+        "cancelled": true,
+        "error": "已取消",
+        "first_failure": "2026-11-24 03:29:14.485 download runtime fail https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/RVC-runtime/not-exist.tar: resume: status 404",
+        "first_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/RVC-runtime/not-exist.tar",
+        "full_archive_verified": false,
+        "source": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/19fad1f49c58719c3a15f78f277e9755f5732c17/fabric/runtime/runtime-nvidia-2026.07.21.tar",
+        "variant": "nvidia"
+      },
+      "pass": true
+    },
+    {
+      "check": "amd_download",
+      "evidence": {
+        "bytes": 1801268224,
+        "elapsed_seconds": 240.3807474,
+        "expected_sha256": "5d5e4437c70ac1cf368232829381170d5a88f457eed20d14d35b1ef155dd0274",
+        "name": "runtime-amd-2026.07.21.tar",
+        "path": "\\\\?\\F:\\Dev\\Turing-Mirror\\RVC-Fabric\\User_Data\\e2e\\modelscope-20261123T192912Z-23768\\runtime-amd-2026.07.21.tar",
+        "sha256": "5d5e4437c70ac1cf368232829381170d5a88f457eed20d14d35b1ef155dd0274",
+        "source": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/19fad1f49c58719c3a15f78f277e9755f5732c17/fabric/runtime/runtime-amd-2026.07.21.tar",
+        "variant": "amd"
+      },
+      "pass": true
+    },
+    {
+      "check": "cleanup",
+      "evidence": {
+        "remaining_archive_files": 0,
+        "removed": [
+          {
+            "bytes": 4209408,
+            "path": "\\\\?\\F:\\Dev\\Turing-Mirror\\RVC-Fabric\\User_Data\\e2e\\modelscope-20261123T192912Z-23768\\fallback-runtime-nvidia-2026.07.21.tar.part"
+          },
+          {
+            "bytes": 145,
+            "path": "\\\\?\\F:\\Dev\\Turing-Mirror\\RVC-Fabric\\User_Data\\e2e\\modelscope-20261123T192912Z-23768\\fallback-runtime-nvidia-2026.07.21.tar.part.src"
+          },
+          {
+            "bytes": 1801268224,
+            "path": "\\\\?\\F:\\Dev\\Turing-Mirror\\RVC-Fabric\\User_Data\\e2e\\modelscope-20261123T192912Z-23768\\runtime-amd-2026.07.21.tar"
+          }
+        ]
+      },
+      "pass": true
+    }
+  ],
+  "started_at": "2026-11-23T19:29:12.797904500+00:00"
+}

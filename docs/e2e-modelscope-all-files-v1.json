@@ -1,0 +1,2947 @@
+{
+  "checkout": "2357ccf9dd46a907f59b2fa0520097e0b09ef56b",
+  "started_at": "2026-11-24T12:58:56.836033+00:00",
+  "completed_at": "2026-11-24T12:59:15.262165+00:00",
+  "catalogs": [
+    {
+      "catalog": "rvc_cnb",
+      "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/git/raw/main/index.json",
+      "status": 200,
+      "bytes": 1098149,
+      "sha256": "47bbc0c0b4d76400b1f2045287c7abd5182551a0e842a2534e40c1376358e328",
+      "modelscope_entries": 76,
+      "unique_range_requests": 71,
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "url": "https://cnb.cool/Turing-Mirror/GPT-SoVITS-Fabric-Releases/-/git/raw/main/index.json",
+      "status": 200,
+      "bytes": 37072,
+      "sha256": "f117c1e184b353a90c72823d06ce446515e43c7f7fa7c528f767131880c91438",
+      "modelscope_entries": 51,
+      "unique_range_requests": 50,
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "url": "https://www.turingmirror.com/releases/gpt-sovits-fabric/index.json",
+      "status": 200,
+      "bytes": 37072,
+      "sha256": "f117c1e184b353a90c72823d06ce446515e43c7f7fa7c528f767131880c91438",
+      "modelscope_entries": 51,
+      "unique_range_requests": 50,
+      "pass": true
+    }
+  ],
+  "dependency_catalog_urls": [
+    {
+      "catalog_first": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/engine-core/engine-core-260722.zip",
+      "catalog_sha256": "ecb3231c7d26ad553e902ac24d40daf3d3fbe5786a7d8e78af8038fc389cab47",
+      "key": "engine_core",
+      "pass": true,
+      "sha256": "ecb3231c7d26ad553e902ac24d40daf3d3fbe5786a7d8e78af8038fc389cab47",
+      "urls": [
+        "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/engine-core/engine-core-260722.zip",
+        "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/engine-core/engine-core-260722.zip",
+        "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/ecb3231c7d26ad553e902ac24d40daf3d3fbe5786a7d8e78af8038fc389cab47"
+      ]
+    },
+    {
+      "catalog_first": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/vbcable/vbcable-setup.zip",
+      "catalog_sha256": "0518435a76264856e4e2733ac22143ff16595c763cbf58106ed04d6895c6ddf5",
+      "key": "vbcable",
+      "pass": true,
+      "sha256": "0518435a76264856e4e2733ac22143ff16595c763cbf58106ed04d6895c6ddf5",
+      "urls": [
+        "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/vbcable/vbcable-setup.zip",
+        "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/vbcable/vbcable-setup.zip",
+        "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/0518435a76264856e4e2733ac22143ff16595c763cbf58106ed04d6895c6ddf5"
+      ]
+    }
+  ],
+  "rvc_full_downloads": [
+    {
+      "check": "vbcable",
+      "evidence": {
+        "actual_url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/vbcable/vbcable-setup.zip",
+        "bytes": 1299644,
+        "expected_bytes": 1299644,
+        "expected_sha256": "0518435a76264856e4e2733ac22143ff16595c763cbf58106ed04d6895c6ddf5",
+        "id": null,
+        "kind": "file",
+        "name": "vbcable-setup.zip",
+        "sha256": "0518435a76264856e4e2733ac22143ff16595c763cbf58106ed04d6895c6ddf5",
+        "urls": [
+          "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/vbcable/vbcable-setup.zip",
+          "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/vbcable/vbcable-setup.zip"
+        ]
+      },
+      "pass": true
+    },
+    {
+      "check": "voice",
+      "evidence": {
+        "actual_url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/bd6eb6155af4eabbe100e3fbd4ace25c9d936b81/reposts/guanguan-v2.zip",
+        "bytes": 51006395,
+        "expected_bytes": 51006395,
+        "expected_sha256": "dfb9a54afe78a95b32f1742090bd55541c28a205f3f958884247e4a454e2aeb3",
+        "id": "guanguan",
+        "kind": "voice_pack",
+        "name": "guanguanV1",
+        "sha256": "dfb9a54afe78a95b32f1742090bd55541c28a205f3f958884247e4a454e2aeb3",
+        "urls": [
+          "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/bd6eb6155af4eabbe100e3fbd4ace25c9d936b81/reposts/guanguan-v2.zip"
+        ]
+      },
+      "pass": true
+    },
+    {
+      "check": "extra",
+      "evidence": {
+        "actual_url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-denoise/UVR-DeNoise-Lite.pth",
+        "bytes": 17922277,
+        "expected_bytes": 17922277,
+        "expected_sha256": "0023492fe98c406817b5253965de19ede65d1c147db015a3a428f07602e99571",
+        "id": null,
+        "kind": "file",
+        "name": "legacy_vr/vr_denoise/UVR-DeNoise-Lite.pth",
+        "sha256": "0023492fe98c406817b5253965de19ede65d1c147db015a3a428f07602e99571",
+        "urls": [
+          "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-denoise/UVR-DeNoise-Lite.pth",
+          "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/UVR-DeNoise-Lite.pth"
+        ]
+      },
+      "pass": true
+    }
+  ],
+  "gsv_full_downloads": [
+    {
+      "catalog": "gsv_cnb",
+      "catalog_url": "https://cnb.cool/Turing-Mirror/GPT-SoVITS-Fabric-Releases/-/git/raw/main/index.json",
+      "key": "pymss-denoise",
+      "name": "legacy_vr/vr_denoise/UVR-DeNoise-Lite.pth",
+      "actual_url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-denoise/UVR-DeNoise-Lite.pth",
+      "expected_bytes": 17922277,
+      "expected_sha256": "0023492fe98c406817b5253965de19ede65d1c147db015a3a428f07602e99571",
+      "status": 200,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/00/23/492fe98c406817b5253965de19ede65d1c147db015a3a428f07602e99571",
+      "bytes": 17922277,
+      "sha256": "0023492fe98c406817b5253965de19ede65d1c147db015a3a428f07602e99571",
+      "pass": true,
+      "download_deleted": true
+    },
+    {
+      "catalog": "gsv_web",
+      "catalog_url": "https://www.turingmirror.com/releases/gpt-sovits-fabric/index.json",
+      "key": "pymss-denoise",
+      "name": "legacy_vr/vr_denoise/UVR-DeNoise-Lite.pth",
+      "actual_url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-denoise/UVR-DeNoise-Lite.pth",
+      "expected_bytes": 17922277,
+      "expected_sha256": "0023492fe98c406817b5253965de19ede65d1c147db015a3a428f07602e99571",
+      "status": 200,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/00/23/492fe98c406817b5253965de19ede65d1c147db015a3a428f07602e99571",
+      "bytes": 17922277,
+      "sha256": "0023492fe98c406817b5253965de19ede65d1c147db015a3a428f07602e99571",
+      "pass": true,
+      "download_deleted": true
+    }
+  ],
+  "range_summary": [
+    {
+      "catalog": "rvc_cnb",
+      "total": 71,
+      "passed": 71
+    },
+    {
+      "catalog": "gsv_cnb",
+      "total": 50,
+      "passed": 49
+    },
+    {
+      "catalog": "gsv_web",
+      "total": 50,
+      "passed": 49
+    }
+  ],
+  "range_results": [
+    {
+      "catalog": "gsv_cnb",
+      "path": "/engine_core/base-g2pw",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/engine-core/base-g2pw.zip",
+      "expected_bytes": 637296041,
+      "sha256": "c74963eba422412f0e86c3623d7ef24251579fcef236f971f68c5c34516fade5",
+      "name": "base-g2pw.zip",
+      "paths": [
+        "/engine_core/base-g2pw"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/637296041",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/c7/49/63eba422412f0e86c3623d7ef24251579fcef236f971f68c5c34516fade5",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/engine_core/base-gpt-s1v3",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/engine-core/base-gpt-s1v3.zip",
+      "expected_bytes": 155285008,
+      "sha256": "a0bdc3d323b3cdcd0b728f32c46c8d017c1f01b71d36c3357c0f6cfa15329ea8",
+      "name": "base-gpt-s1v3.zip",
+      "paths": [
+        "/engine_core/base-gpt-s1v3"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/155285008",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/a0/bd/c3d323b3cdcd0b728f32c46c8d017c1f01b71d36c3357c0f6cfa15329ea8",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/engine_core/base-hubert-bert",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/engine-core/base-hubert-bert.zip",
+      "expected_bytes": 840309330,
+      "sha256": "6b68a21a344931460fc12288382eecfe751f67ddfb97eecf440ce6625eee63c5",
+      "name": "base-hubert-bert.zip",
+      "paths": [
+        "/engine_core/base-hubert-bert"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/840309330",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/6b/68/a21a344931460fc12288382eecfe751f67ddfb97eecf440ce6625eee63c5",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/engine_core/base-langdetect",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/engine-core/base-langdetect.zip",
+      "expected_bytes": 131266386,
+      "sha256": "a0fe2fbfb0decf18bd03b599e6ed3fb59060a2eca9fe2225d482cf768f164543",
+      "name": "base-langdetect.zip",
+      "paths": [
+        "/engine_core/base-langdetect"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/131266386",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/a0/fe/2fbfb0decf18bd03b599e6ed3fb59060a2eca9fe2225d482cf768f164543",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/engine_core/base-v2proplus",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/engine-core/base-v2proplus.zip",
+      "expected_bytes": 434087597,
+      "sha256": "4b1a31ec85c75333a3e5c0dc5f66885cd599b867c7b5feb8a470648540065e68",
+      "name": "base-v2proplus.zip",
+      "paths": [
+        "/engine_core/base-v2proplus"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/434087597",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/4b/1a/31ec85c75333a3e5c0dc5f66885cd599b867c7b5feb8a470648540065e68",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/gsv-v2/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/extras/gsv-v2/s1bert25hz-5kh-longer-epoch=12-step=369668.ckpt",
+      "expected_bytes": 155315150,
+      "sha256": "732f94e63b148066e24c7f9d2637f3374083e637635f07fbdb695dee20ddbe1f",
+      "name": "s1bert25hz-5kh-longer-epoch=12-step=369668.ckpt",
+      "paths": [
+        "/extras/gsv-v2/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/155315150",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/73/2f/94e63b148066e24c7f9d2637f3374083e637635f07fbdb695dee20ddbe1f",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/gsv-v2/files/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/extras/gsv-v2/s2D2333k.pth",
+      "expected_bytes": 93534164,
+      "sha256": "8ae7fe8dd8c8f2e718de359e00edac88b0c71ab2fd10b07ad4cc45070eb8a836",
+      "name": "s2D2333k.pth",
+      "paths": [
+        "/extras/gsv-v2/files/1"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/93534164",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/8a/e7/fe8dd8c8f2e718de359e00edac88b0c71ab2fd10b07ad4cc45070eb8a836",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/gsv-v2/files/2",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/extras/gsv-v2/s2G2333k.pth",
+      "expected_bytes": 106035259,
+      "sha256": "924fdccaa3c574bf139c25c9759aa1ed3b3f99e19a7c529ee996c2bc17663695",
+      "name": "s2G2333k.pth",
+      "paths": [
+        "/extras/gsv-v2/files/2"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/106035259",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/92/4f/dccaa3c574bf139c25c9759aa1ed3b3f99e19a7c529ee996c2bc17663695",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/gsv-v3/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/extras/gsv-v3/s2Gv3.pth",
+      "expected_bytes": 769035145,
+      "sha256": "f33abb1920076d988e1711d5f41b5c9c6d7f92575b4acf0ad4fae6a4ebf0cf19",
+      "name": "s2Gv3.pth",
+      "paths": [
+        "/extras/gsv-v3/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/769035145",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/f3/3a/bb1920076d988e1711d5f41b5c9c6d7f92575b4acf0ad4fae6a4ebf0cf19",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/gsv-v3/files/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/extras/gsv-v3/models--nvidia--bigvgan_v2_24khz_100band_256x/config.json",
+      "expected_bytes": 1402,
+      "sha256": "d77e2c96583ca2296ac112a56ec7cc6bd5da4bf7681ceff18448bedc4fcf6512",
+      "name": "models--nvidia--bigvgan_v2_24khz_100band_256x/config.json",
+      "paths": [
+        "/extras/gsv-v3/files/1"
+      ],
+      "status": 200,
+      "content_range": "bytes 0-0/1402",
+      "received_bytes": 1,
+      "final_url_without_query": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/extras/gsv-v3/models--nvidia--bigvgan_v2_24khz_100band_256x/config.json",
+      "pass": false,
+      "headers": {
+        "Date": "Tue, 24 Nov 2026 12:59:09 GMT",
+        "Content-Type": "application/json",
+        "Content-Length": "1",
+        "Connection": "close",
+        "Accept-Ranges": "bytes",
+        "Content-Disposition": "attachment;filename=config.json",
+        "Content-Range": "bytes 0-0/1402",
+        "Strict-Transport-Security": "max-age=15724800; includeSubDomains",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Credentials": "true",
+        "Access-Control-Allow-Methods": "GET, PUT, POST, DELETE, PATCH, OPTIONS",
+        "Access-Control-Allow-Headers": "DNT,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization",
+        "Access-Control-Max-Age": "1728000"
+      },
+      "body_hex": "7b",
+      "body_text": "{"
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/gsv-v3/files/2",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/extras/gsv-v3/models--nvidia--bigvgan_v2_24khz_100band_256x/bigvgan_generator.pt",
+      "expected_bytes": 225179685,
+      "sha256": "ee5e2f9cd60b51db75e1806f4fe7621733757586c541c78cb3dd369d5ba24476",
+      "name": "models--nvidia--bigvgan_v2_24khz_100band_256x/bigvgan_generator.pt",
+      "paths": [
+        "/extras/gsv-v3/files/2"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/225179685",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/ee/5e/2f9cd60b51db75e1806f4fe7621733757586c541c78cb3dd369d5ba24476",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/gsv-v4/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/extras/gsv-v4/s2Gv4.pth",
+      "expected_bytes": 769025545,
+      "sha256": "906fe22f48c3e037a389df291d4d32a9414e15dbb8f9628643e83aaced109ea4",
+      "name": "s2Gv4.pth",
+      "paths": [
+        "/extras/gsv-v4/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/769025545",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/90/6f/e22f48c3e037a389df291d4d32a9414e15dbb8f9628643e83aaced109ea4",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/gsv-v4/files/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/extras/gsv-v4/vocoder.pth",
+      "expected_bytes": 57781109,
+      "sha256": "4d611913df7b12d49e8976c944558d2d096816365edfc6c35a9e85b67dd14ed9",
+      "name": "vocoder.pth",
+      "paths": [
+        "/extras/gsv-v4/files/1"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/57781109",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/4d/61/1913df7b12d49e8976c944558d2d096816365edfc6c35a9e85b67dd14ed9",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/gsv-v5/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/extras/gsv-v5/s2Gv5turbo.pth",
+      "expected_bytes": 766406144,
+      "sha256": "287b32a06b7d486f5303ec520468b0728fb01aac8b0f5d86fd5455c9a1d3e022",
+      "name": "s2Gv5turbo.pth",
+      "paths": [
+        "/extras/gsv-v5/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/766406144",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/28/7b/32a06b7d486f5303ec520468b0728fb01aac8b0f5d86fd5455c9a1d3e022",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/gsv-v5/files/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/extras/gsv-v5/s2Gv5dev.pth",
+      "expected_bytes": 766385517,
+      "sha256": "16c11fc588a9229a479316a11fc0f518087e79773f5271666a90b39d50460407",
+      "name": "s2Gv5dev.pth",
+      "paths": [
+        "/extras/gsv-v5/files/1"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/766385517",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/16/c1/1fc588a9229a479316a11fc0f518087e79773f5271666a90b39d50460407",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/gsv-v5/files/2",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/extras/gsv-v5/vocoder.pth",
+      "expected_bytes": 57761163,
+      "sha256": "b7543c83222aa2105bb4efb56845086bc5f2eeba61243d723ffa062052b3221f",
+      "name": "vocoder.pth",
+      "paths": [
+        "/extras/gsv-v5/files/2"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/57761163",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/b7/54/3c83222aa2105bb4efb56845086bc5f2eeba61243d723ffa062052b3221f",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/pymss-bve/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-bve/UVR-BVE-4B_SN-44100-1.pth",
+      "expected_bytes": 223650277,
+      "sha256": "56165bdfa0dd5df7930ff76652200dc287e1bfef622bba5c812c736dc22067fe",
+      "name": "legacy_vr/vr_backing_vocal/UVR-BVE-4B_SN-44100-1.pth",
+      "paths": [
+        "/extras/pymss-bve/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/223650277",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/56/16/5bdfa0dd5df7930ff76652200dc287e1bfef622bba5c812c736dc22067fe",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/pymss-deecho/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-deecho/UVR-De-Echo-Normal.pth",
+      "expected_bytes": 127139365,
+      "sha256": "b849dd575643b075c257fb7a96c2ef5a79d7a5e7df74a2b319ad47118f1ee769",
+      "name": "legacy_vr/vr_deecho/UVR-De-Echo-Normal.pth",
+      "paths": [
+        "/extras/pymss-deecho/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/127139365",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/b8/49/dd575643b075c257fb7a96c2ef5a79d7a5e7df74a2b319ad47118f1ee769",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/pymss-deecho/files/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-deecho/UVR-De-Echo-Aggressive.pth",
+      "expected_bytes": 127139365,
+      "sha256": "1bd1d79d9c5d1b17d20f96f8a9f8aff1b55a83014f70712446bf420c0188e0a0",
+      "name": "legacy_vr/vr_deecho/UVR-De-Echo-Aggressive.pth",
+      "paths": [
+        "/extras/pymss-deecho/files/1"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/127139365",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/1b/d1/d79d9c5d1b17d20f96f8a9f8aff1b55a83014f70712446bf420c0188e0a0",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/pymss-deecho/files/2",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-deecho/UVR-DeEcho-DeReverb.pth",
+      "expected_bytes": 223650277,
+      "sha256": "e644028ec82865dc0fe082bc6fea85a43f7c71cfe375caee2da2d154aa661ee7",
+      "name": "legacy_vr/vr_deecho_dereverb/UVR-DeEcho-DeReverb.pth",
+      "paths": [
+        "/extras/pymss-deecho/files/2"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/223650277",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/e6/44/028ec82865dc0fe082bc6fea85a43f7c71cfe375caee2da2d154aa661ee7",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/pymss-denoise/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-denoise/UVR-DeNoise.pth",
+      "expected_bytes": 127139365,
+      "sha256": "5addf43ece5bddd18da9f575a02d7ffdb32342414e6ad7ac8d1dd7a04138a628",
+      "name": "legacy_vr/vr_denoise/UVR-DeNoise.pth",
+      "paths": [
+        "/extras/pymss-denoise/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/127139365",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/5a/dd/f43ece5bddd18da9f575a02d7ffdb32342414e6ad7ac8d1dd7a04138a628",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/pymss-denoise/files/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-denoise/UVR-DeNoise-Lite.pth",
+      "expected_bytes": 17922277,
+      "sha256": "0023492fe98c406817b5253965de19ede65d1c147db015a3a428f07602e99571",
+      "name": "legacy_vr/vr_denoise/UVR-DeNoise-Lite.pth",
+      "paths": [
+        "/extras/pymss-denoise/files/1"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/17922277",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/00/23/492fe98c406817b5253965de19ede65d1c147db015a3a428f07602e99571",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/pymss-dereverb/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-dereverb/UVR-DeReverb-aufr33-jarredou_4band_v4_ms_fullband.pth",
+      "expected_bytes": 58928133,
+      "sha256": "fff726b0adf09f2eadc2151645557db81e1a01fe15d91f9bbbfa9b50a007f1fd",
+      "name": "legacy_vr/vr_dereverb/UVR-DeReverb-aufr33-jarredou_4band_v4_ms_fullband.pth",
+      "paths": [
+        "/extras/pymss-dereverb/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/58928133",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/ff/f7/26b0adf09f2eadc2151645557db81e1a01fe15d91f9bbbfa9b50a007f1fd",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/pymss-harmonic/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-harmonic/Harmonic_Noise_Separation_yxlllc.pth",
+      "expected_bytes": 59320122,
+      "sha256": "d4dd9f8259692f9ceb5b05d86fd53553ef582a1c65184f4cfff2e00cdfe33dd2",
+      "name": "legacy_vr/vr_harmonic_noise/Harmonic_Noise_Separation_yxlllc.pth",
+      "paths": [
+        "/extras/pymss-harmonic/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/59320122",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/d4/dd/9f8259692f9ceb5b05d86fd53553ef582a1c65184f4cfff2e00cdfe33dd2",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/pymss-hp2/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-hp2/7_HP2-UVR.pth",
+      "expected_bytes": 550120123,
+      "sha256": "545ee733b704a263bf6f75328c5ed14f0fb439dcda7a6e8f53c8cecb92877afe",
+      "name": "legacy_vr/vr_hp2/7_HP2-UVR.pth",
+      "paths": [
+        "/extras/pymss-hp2/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/550120123",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/54/5e/e733b704a263bf6f75328c5ed14f0fb439dcda7a6e8f53c8cecb92877afe",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/pymss-hp2/files/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-hp2/8_HP2-UVR.pth",
+      "expected_bytes": 550131079,
+      "sha256": "e072299a87cf3fcdd36da6adc6d2837bed0c07a208775a7678c3d5deeea58f79",
+      "name": "legacy_vr/vr_hp2/8_HP2-UVR.pth",
+      "paths": [
+        "/extras/pymss-hp2/files/1"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/550131079",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/e0/72/299a87cf3fcdd36da6adc6d2837bed0c07a208775a7678c3d5deeea58f79",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/pymss-hp2/files/2",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-hp2/9_HP2-UVR.pth",
+      "expected_bytes": 550131079,
+      "sha256": "a99d032ed8c9d59077a8a41f0ceccb279d59ec10c87102167a283151d25ad9a2",
+      "name": "legacy_vr/vr_hp2/9_HP2-UVR.pth",
+      "paths": [
+        "/extras/pymss-hp2/files/2"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/550131079",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/a9/9d/032ed8c9d59077a8a41f0ceccb279d59ec10c87102167a283151d25ad9a2",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/pymss-inst/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-inst/1_HP-UVR.pth",
+      "expected_bytes": 126792647,
+      "sha256": "d9c654305888fe09668078ade76962b32d3782848f158192da7403a650e935a6",
+      "name": "legacy_vr/vr_instrumental_extraction/1_HP-UVR.pth",
+      "paths": [
+        "/extras/pymss-inst/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/126792647",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/d9/c6/54305888fe09668078ade76962b32d3782848f158192da7403a650e935a6",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/pymss-inst/files/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-inst/2_HP-UVR.pth",
+      "expected_bytes": 126782699,
+      "sha256": "26d6400d2d2e90811ba2381828c8c3519196097375af524c3d0edd969acf5356",
+      "name": "legacy_vr/vr_instrumental_extraction/2_HP-UVR.pth",
+      "paths": [
+        "/extras/pymss-inst/files/1"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/126782699",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/26/d6/400d2d2e90811ba2381828c8c3519196097375af524c3d0edd969acf5356",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/pymss-karaoke/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-karaoke/5_HP-Karaoke-UVR.pth",
+      "expected_bytes": 126782699,
+      "sha256": "fe00891defbb61f4261500af22f7624f1a3df8dc75fa3998d1aece02e6be4537",
+      "name": "legacy_vr/vr_karaoke/5_HP-Karaoke-UVR.pth",
+      "paths": [
+        "/extras/pymss-karaoke/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/126782699",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/fe/00/891defbb61f4261500af22f7624f1a3df8dc75fa3998d1aece02e6be4537",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/pymss-karaoke/files/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-karaoke/6_HP-Karaoke-UVR.pth",
+      "expected_bytes": 126782699,
+      "sha256": "4ce7eaaa9e56f09366b788aebf6d3a72aec8145692c56f1e090e4e7e2d7ce65f",
+      "name": "legacy_vr/vr_karaoke/6_HP-Karaoke-UVR.pth",
+      "paths": [
+        "/extras/pymss-karaoke/files/1"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/126782699",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/4c/e7/eaaa9e56f09366b788aebf6d3a72aec8145692c56f1e090e4e7e2d7ce65f",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/pymss-mgm/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-mgm/MGM_MAIN_v4.pth",
+      "expected_bytes": 31938951,
+      "sha256": "0e6f0c0592333a3b215f61ac1e01f6c24c059f903f0789cf634e92daffae1dce",
+      "name": "legacy_vr/vr_mgm/MGM_MAIN_v4.pth",
+      "paths": [
+        "/extras/pymss-mgm/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/31938951",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/0e/6f/0c0592333a3b215f61ac1e01f6c24c059f903f0789cf634e92daffae1dce",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/pymss-mgm/files/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-mgm/MGM_HIGHEND_v4.pth",
+      "expected_bytes": 31861529,
+      "sha256": "67bf5241072ae938ae0e6bec44d2d8307d9db81a5299382a5cfe12188131f9ce",
+      "name": "legacy_vr/vr_mgm/MGM_HIGHEND_v4.pth",
+      "paths": [
+        "/extras/pymss-mgm/files/1"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/31861529",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/67/bf/5241072ae938ae0e6bec44d2d8307d9db81a5299382a5cfe12188131f9ce",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/pymss-mgm/files/2",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-mgm/MGM_LOWEND_A_v4.pth",
+      "expected_bytes": 31938951,
+      "sha256": "c5def7a35afecde33a77db214b3e9eeff0e47e8329ff5522d33332bc02b4b0e3",
+      "name": "legacy_vr/vr_mgm/MGM_LOWEND_A_v4.pth",
+      "paths": [
+        "/extras/pymss-mgm/files/2"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/31938951",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/c5/de/f7a35afecde33a77db214b3e9eeff0e47e8329ff5522d33332bc02b4b0e3",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/pymss-mgm/files/3",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-mgm/MGM_LOWEND_B_v4.pth",
+      "expected_bytes": 31938951,
+      "sha256": "93d6a08abf6357e5f37d4eb6892267520f5bb9e90f45486b08a0857d5fcb2ec8",
+      "name": "legacy_vr/vr_mgm/MGM_LOWEND_B_v4.pth",
+      "paths": [
+        "/extras/pymss-mgm/files/3"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/31938951",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/93/d6/a08abf6357e5f37d4eb6892267520f5bb9e90f45486b08a0857d5fcb2ec8",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/pymss-sp/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-sp/10_SP-UVR-2B-32000-1.pth",
+      "expected_bytes": 31938951,
+      "sha256": "a178d8a8bc2c992bc5e5a045ef5ab8706d55c375d1bfe34700c1946d6c2d28b6",
+      "name": "legacy_vr/vr_sp/10_SP-UVR-2B-32000-1.pth",
+      "paths": [
+        "/extras/pymss-sp/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/31938951",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/a1/78/d8a8bc2c992bc5e5a045ef5ab8706d55c375d1bfe34700c1946d6c2d28b6",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/pymss-sp/files/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-sp/11_SP-UVR-2B-32000-2.pth",
+      "expected_bytes": 31938951,
+      "sha256": "9e80e69ecd2244496710fa77e7d2c785bad93e2a87a7def65c38272cc9fd1613",
+      "name": "legacy_vr/vr_sp/11_SP-UVR-2B-32000-2.pth",
+      "paths": [
+        "/extras/pymss-sp/files/1"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/31938951",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/9e/80/e69ecd2244496710fa77e7d2c785bad93e2a87a7def65c38272cc9fd1613",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/pymss-sp/files/2",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-sp/12_SP-UVR-3B-44100.pth",
+      "expected_bytes": 31938951,
+      "sha256": "5b826e6a44dbe007bde36c720bb2afeed008348cef1b61e35898fee5282d3918",
+      "name": "legacy_vr/vr_sp/12_SP-UVR-3B-44100.pth",
+      "paths": [
+        "/extras/pymss-sp/files/2"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/31938951",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/5b/82/6e6a44dbe007bde36c720bb2afeed008348cef1b61e35898fee5282d3918",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/pymss-sp/files/3",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-sp/13_SP-UVR-4B-44100-1.pth",
+      "expected_bytes": 31938951,
+      "sha256": "afb84b3d1da4a7e24033e5a0e85dbde2ac5f5e4b1e839788748735ac3bcc5046",
+      "name": "legacy_vr/vr_sp/13_SP-UVR-4B-44100-1.pth",
+      "paths": [
+        "/extras/pymss-sp/files/3"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/31938951",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/af/b8/4b3d1da4a7e24033e5a0e85dbde2ac5f5e4b1e839788748735ac3bcc5046",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/pymss-sp/files/4",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-sp/14_SP-UVR-4B-44100-2.pth",
+      "expected_bytes": 31938951,
+      "sha256": "78404d85d6e4e11a3d2362f6577fc398f77406b7881fbac402e0c6191d6efca1",
+      "name": "legacy_vr/vr_sp/14_SP-UVR-4B-44100-2.pth",
+      "paths": [
+        "/extras/pymss-sp/files/4"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/31938951",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/78/40/4d85d6e4e11a3d2362f6577fc398f77406b7881fbac402e0c6191d6efca1",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/pymss-sp/files/5",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-sp/15_SP-UVR-MID-44100-1.pth",
+      "expected_bytes": 31938951,
+      "sha256": "bd03d4061ce34569e8df9e0a13a235af7ff0d3c0c3def491db4439f9ff344dd0",
+      "name": "legacy_vr/vr_sp/15_SP-UVR-MID-44100-1.pth",
+      "paths": [
+        "/extras/pymss-sp/files/5"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/31938951",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/bd/03/d4061ce34569e8df9e0a13a235af7ff0d3c0c3def491db4439f9ff344dd0",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/pymss-sp/files/6",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-sp/16_SP-UVR-MID-44100-2.pth",
+      "expected_bytes": 31938951,
+      "sha256": "f0e5025987670f963a339db861b078d8526bf912f0ce2e00f732a7f0a3e846cc",
+      "name": "legacy_vr/vr_sp/16_SP-UVR-MID-44100-2.pth",
+      "paths": [
+        "/extras/pymss-sp/files/6"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/31938951",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/f0/e5/025987670f963a339db861b078d8526bf912f0ce2e00f732a7f0a3e846cc",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/pymss-vocal/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-vocal/3_HP-Vocal-UVR.pth",
+      "expected_bytes": 126792647,
+      "sha256": "7d3f9be265b2f2c3d684f23a9905674627c2552e0f6b5f36325cef8dc1f0ff6b",
+      "name": "legacy_vr/vr_vocal_extraction/3_HP-Vocal-UVR.pth",
+      "paths": [
+        "/extras/pymss-vocal/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/126792647",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/7d/3f/9be265b2f2c3d684f23a9905674627c2552e0f6b5f36325cef8dc1f0ff6b",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/pymss-vocal/files/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-vocal/4_HP-Vocal-UVR.pth",
+      "expected_bytes": 126792647,
+      "sha256": "295d1e1e3a52c17a040a4a6fe390214ad8ca0797f091b7c6d8db97d247a27271",
+      "name": "legacy_vr/vr_vocal_extraction/4_HP-Vocal-UVR.pth",
+      "paths": [
+        "/extras/pymss-vocal/files/1"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/126792647",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/29/5d/1e1e3a52c17a040a4a6fe390214ad8ca0797f091b7c6d8db97d247a27271",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/extras/pymss-wind/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-wind/17_HP-Wind_Inst-UVR.pth",
+      "expected_bytes": 223661285,
+      "sha256": "acc6d472b4b478da9c9ab5af45b167749e05a7f65b30c7d5988b3700a513aeee",
+      "name": "legacy_vr/vr_wind_instrumental/17_HP-Wind_Inst-UVR.pth",
+      "paths": [
+        "/extras/pymss-wind/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/223661285",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/ac/c6/d472b4b478da9c9ab5af45b167749e05a7f65b30c7d5988b3700a513aeee",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/gsv-cpp/engine",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/gsv-cpp/gsv-cpp-engine-v2.zip",
+      "expected_bytes": 43623665,
+      "sha256": "265b64a65a9a4bb778978f9702c639fdfae80c79a5f370f290a50dc8442e3837",
+      "name": "gsv-cpp-engine-v2.zip",
+      "paths": [
+        "/gsv-cpp/engine"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/43623665",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/26/5b/64a65a9a4bb778978f9702c639fdfae80c79a5f370f290a50dc8442e3837",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/gsv-cpp/shared",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/gsv-cpp/gsv-cpp-shared-v1.zip",
+      "expected_bytes": 852580206,
+      "sha256": "e369c8d5ed4162c6c08a82a4092678fc476f20416f023c64e294b4619919fd76",
+      "name": "gsv-cpp-shared-v1.zip",
+      "paths": [
+        "/gsv-cpp/shared"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/852580206",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/e3/69/c8d5ed4162c6c08a82a4092678fc476f20416f023c64e294b4619919fd76",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/roles/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/71a0acd8101272ee27d3e1148089f575095f8fa8/models/hayase-yuuka-ja-v5turbo-v1/hayase_yuuka-ja_voice.zip",
+      "expected_bytes": 248479260,
+      "sha256": "4e409dbf866f9df69d18c8c36fb4d98a6ff93d9e2c6507c0f6bf48c251e27514",
+      "name": "早濑优香（日配）",
+      "paths": [
+        "/roles/0",
+        "/voices/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/248479260",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/4e/40/9dbf866f9df69d18c8c36fb4d98a6ff93d9e2c6507c0f6bf48c251e27514",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/runtimes/cpu/parts/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/runtime/runtime-cpu-2026.10.31.tar.gz",
+      "expected_bytes": 594573268,
+      "sha256": "30910118ba208dc6ef599dca060d99bea44f55fc32665b0ed9f53ac816cc989f",
+      "name": "runtime-cpu-2026.10.31.tar.gz",
+      "paths": [
+        "/runtimes/cpu/parts/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/594573268",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/30/91/0118ba208dc6ef599dca060d99bea44f55fc32665b0ed9f53ac816cc989f",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_cnb",
+      "path": "/runtimes/nvidia/parts/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/runtime/runtime-nvidia-2026.10.31.tar.gz",
+      "expected_bytes": 3956611802,
+      "sha256": "cf923a03d80ea3abc8371e375c0c10ed663543c3c519b9241c5ae9a52eb34fd2",
+      "name": "runtime-nvidia-2026.10.31.tar.gz",
+      "paths": [
+        "/runtimes/nvidia/parts/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/3956611802",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/cf/92/3a03d80ea3abc8371e375c0c10ed663543c3c519b9241c5ae9a52eb34fd2",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/engine_core/base-g2pw",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/engine-core/base-g2pw.zip",
+      "expected_bytes": 637296041,
+      "sha256": "c74963eba422412f0e86c3623d7ef24251579fcef236f971f68c5c34516fade5",
+      "name": "base-g2pw.zip",
+      "paths": [
+        "/engine_core/base-g2pw"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/637296041",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/c7/49/63eba422412f0e86c3623d7ef24251579fcef236f971f68c5c34516fade5",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/engine_core/base-gpt-s1v3",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/engine-core/base-gpt-s1v3.zip",
+      "expected_bytes": 155285008,
+      "sha256": "a0bdc3d323b3cdcd0b728f32c46c8d017c1f01b71d36c3357c0f6cfa15329ea8",
+      "name": "base-gpt-s1v3.zip",
+      "paths": [
+        "/engine_core/base-gpt-s1v3"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/155285008",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/a0/bd/c3d323b3cdcd0b728f32c46c8d017c1f01b71d36c3357c0f6cfa15329ea8",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/engine_core/base-hubert-bert",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/engine-core/base-hubert-bert.zip",
+      "expected_bytes": 840309330,
+      "sha256": "6b68a21a344931460fc12288382eecfe751f67ddfb97eecf440ce6625eee63c5",
+      "name": "base-hubert-bert.zip",
+      "paths": [
+        "/engine_core/base-hubert-bert"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/840309330",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/6b/68/a21a344931460fc12288382eecfe751f67ddfb97eecf440ce6625eee63c5",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/engine_core/base-langdetect",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/engine-core/base-langdetect.zip",
+      "expected_bytes": 131266386,
+      "sha256": "a0fe2fbfb0decf18bd03b599e6ed3fb59060a2eca9fe2225d482cf768f164543",
+      "name": "base-langdetect.zip",
+      "paths": [
+        "/engine_core/base-langdetect"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/131266386",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/a0/fe/2fbfb0decf18bd03b599e6ed3fb59060a2eca9fe2225d482cf768f164543",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/engine_core/base-v2proplus",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/engine-core/base-v2proplus.zip",
+      "expected_bytes": 434087597,
+      "sha256": "4b1a31ec85c75333a3e5c0dc5f66885cd599b867c7b5feb8a470648540065e68",
+      "name": "base-v2proplus.zip",
+      "paths": [
+        "/engine_core/base-v2proplus"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/434087597",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/4b/1a/31ec85c75333a3e5c0dc5f66885cd599b867c7b5feb8a470648540065e68",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/gsv-v2/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/extras/gsv-v2/s1bert25hz-5kh-longer-epoch=12-step=369668.ckpt",
+      "expected_bytes": 155315150,
+      "sha256": "732f94e63b148066e24c7f9d2637f3374083e637635f07fbdb695dee20ddbe1f",
+      "name": "s1bert25hz-5kh-longer-epoch=12-step=369668.ckpt",
+      "paths": [
+        "/extras/gsv-v2/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/155315150",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/73/2f/94e63b148066e24c7f9d2637f3374083e637635f07fbdb695dee20ddbe1f",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/gsv-v2/files/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/extras/gsv-v2/s2D2333k.pth",
+      "expected_bytes": 93534164,
+      "sha256": "8ae7fe8dd8c8f2e718de359e00edac88b0c71ab2fd10b07ad4cc45070eb8a836",
+      "name": "s2D2333k.pth",
+      "paths": [
+        "/extras/gsv-v2/files/1"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/93534164",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/8a/e7/fe8dd8c8f2e718de359e00edac88b0c71ab2fd10b07ad4cc45070eb8a836",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/gsv-v2/files/2",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/extras/gsv-v2/s2G2333k.pth",
+      "expected_bytes": 106035259,
+      "sha256": "924fdccaa3c574bf139c25c9759aa1ed3b3f99e19a7c529ee996c2bc17663695",
+      "name": "s2G2333k.pth",
+      "paths": [
+        "/extras/gsv-v2/files/2"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/106035259",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/92/4f/dccaa3c574bf139c25c9759aa1ed3b3f99e19a7c529ee996c2bc17663695",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/gsv-v3/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/extras/gsv-v3/s2Gv3.pth",
+      "expected_bytes": 769035145,
+      "sha256": "f33abb1920076d988e1711d5f41b5c9c6d7f92575b4acf0ad4fae6a4ebf0cf19",
+      "name": "s2Gv3.pth",
+      "paths": [
+        "/extras/gsv-v3/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/769035145",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/f3/3a/bb1920076d988e1711d5f41b5c9c6d7f92575b4acf0ad4fae6a4ebf0cf19",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/gsv-v3/files/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/extras/gsv-v3/models--nvidia--bigvgan_v2_24khz_100band_256x/config.json",
+      "expected_bytes": 1402,
+      "sha256": "d77e2c96583ca2296ac112a56ec7cc6bd5da4bf7681ceff18448bedc4fcf6512",
+      "name": "models--nvidia--bigvgan_v2_24khz_100band_256x/config.json",
+      "paths": [
+        "/extras/gsv-v3/files/1"
+      ],
+      "status": 200,
+      "content_range": "bytes 0-0/1402",
+      "received_bytes": 1,
+      "final_url_without_query": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/extras/gsv-v3/models--nvidia--bigvgan_v2_24khz_100band_256x/config.json",
+      "pass": false,
+      "headers": {
+        "Date": "Tue, 24 Nov 2026 12:59:12 GMT",
+        "Content-Type": "application/json",
+        "Content-Length": "1",
+        "Connection": "close",
+        "Accept-Ranges": "bytes",
+        "Content-Disposition": "attachment;filename=config.json",
+        "Content-Range": "bytes 0-0/1402",
+        "Strict-Transport-Security": "max-age=15724800; includeSubDomains",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Credentials": "true",
+        "Access-Control-Allow-Methods": "GET, PUT, POST, DELETE, PATCH, OPTIONS",
+        "Access-Control-Allow-Headers": "DNT,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization",
+        "Access-Control-Max-Age": "1728000"
+      },
+      "body_hex": "7b",
+      "body_text": "{"
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/gsv-v3/files/2",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/extras/gsv-v3/models--nvidia--bigvgan_v2_24khz_100band_256x/bigvgan_generator.pt",
+      "expected_bytes": 225179685,
+      "sha256": "ee5e2f9cd60b51db75e1806f4fe7621733757586c541c78cb3dd369d5ba24476",
+      "name": "models--nvidia--bigvgan_v2_24khz_100band_256x/bigvgan_generator.pt",
+      "paths": [
+        "/extras/gsv-v3/files/2"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/225179685",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/ee/5e/2f9cd60b51db75e1806f4fe7621733757586c541c78cb3dd369d5ba24476",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/gsv-v4/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/extras/gsv-v4/s2Gv4.pth",
+      "expected_bytes": 769025545,
+      "sha256": "906fe22f48c3e037a389df291d4d32a9414e15dbb8f9628643e83aaced109ea4",
+      "name": "s2Gv4.pth",
+      "paths": [
+        "/extras/gsv-v4/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/769025545",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/90/6f/e22f48c3e037a389df291d4d32a9414e15dbb8f9628643e83aaced109ea4",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/gsv-v4/files/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/extras/gsv-v4/vocoder.pth",
+      "expected_bytes": 57781109,
+      "sha256": "4d611913df7b12d49e8976c944558d2d096816365edfc6c35a9e85b67dd14ed9",
+      "name": "vocoder.pth",
+      "paths": [
+        "/extras/gsv-v4/files/1"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/57781109",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/4d/61/1913df7b12d49e8976c944558d2d096816365edfc6c35a9e85b67dd14ed9",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/gsv-v5/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/extras/gsv-v5/s2Gv5turbo.pth",
+      "expected_bytes": 766406144,
+      "sha256": "287b32a06b7d486f5303ec520468b0728fb01aac8b0f5d86fd5455c9a1d3e022",
+      "name": "s2Gv5turbo.pth",
+      "paths": [
+        "/extras/gsv-v5/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/766406144",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/28/7b/32a06b7d486f5303ec520468b0728fb01aac8b0f5d86fd5455c9a1d3e022",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/gsv-v5/files/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/extras/gsv-v5/s2Gv5dev.pth",
+      "expected_bytes": 766385517,
+      "sha256": "16c11fc588a9229a479316a11fc0f518087e79773f5271666a90b39d50460407",
+      "name": "s2Gv5dev.pth",
+      "paths": [
+        "/extras/gsv-v5/files/1"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/766385517",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/16/c1/1fc588a9229a479316a11fc0f518087e79773f5271666a90b39d50460407",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/gsv-v5/files/2",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/extras/gsv-v5/vocoder.pth",
+      "expected_bytes": 57761163,
+      "sha256": "b7543c83222aa2105bb4efb56845086bc5f2eeba61243d723ffa062052b3221f",
+      "name": "vocoder.pth",
+      "paths": [
+        "/extras/gsv-v5/files/2"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/57761163",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/b7/54/3c83222aa2105bb4efb56845086bc5f2eeba61243d723ffa062052b3221f",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/pymss-bve/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-bve/UVR-BVE-4B_SN-44100-1.pth",
+      "expected_bytes": 223650277,
+      "sha256": "56165bdfa0dd5df7930ff76652200dc287e1bfef622bba5c812c736dc22067fe",
+      "name": "legacy_vr/vr_backing_vocal/UVR-BVE-4B_SN-44100-1.pth",
+      "paths": [
+        "/extras/pymss-bve/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/223650277",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/56/16/5bdfa0dd5df7930ff76652200dc287e1bfef622bba5c812c736dc22067fe",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/pymss-deecho/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-deecho/UVR-De-Echo-Normal.pth",
+      "expected_bytes": 127139365,
+      "sha256": "b849dd575643b075c257fb7a96c2ef5a79d7a5e7df74a2b319ad47118f1ee769",
+      "name": "legacy_vr/vr_deecho/UVR-De-Echo-Normal.pth",
+      "paths": [
+        "/extras/pymss-deecho/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/127139365",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/b8/49/dd575643b075c257fb7a96c2ef5a79d7a5e7df74a2b319ad47118f1ee769",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/pymss-deecho/files/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-deecho/UVR-De-Echo-Aggressive.pth",
+      "expected_bytes": 127139365,
+      "sha256": "1bd1d79d9c5d1b17d20f96f8a9f8aff1b55a83014f70712446bf420c0188e0a0",
+      "name": "legacy_vr/vr_deecho/UVR-De-Echo-Aggressive.pth",
+      "paths": [
+        "/extras/pymss-deecho/files/1"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/127139365",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/1b/d1/d79d9c5d1b17d20f96f8a9f8aff1b55a83014f70712446bf420c0188e0a0",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/pymss-deecho/files/2",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-deecho/UVR-DeEcho-DeReverb.pth",
+      "expected_bytes": 223650277,
+      "sha256": "e644028ec82865dc0fe082bc6fea85a43f7c71cfe375caee2da2d154aa661ee7",
+      "name": "legacy_vr/vr_deecho_dereverb/UVR-DeEcho-DeReverb.pth",
+      "paths": [
+        "/extras/pymss-deecho/files/2"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/223650277",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/e6/44/028ec82865dc0fe082bc6fea85a43f7c71cfe375caee2da2d154aa661ee7",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/pymss-denoise/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-denoise/UVR-DeNoise.pth",
+      "expected_bytes": 127139365,
+      "sha256": "5addf43ece5bddd18da9f575a02d7ffdb32342414e6ad7ac8d1dd7a04138a628",
+      "name": "legacy_vr/vr_denoise/UVR-DeNoise.pth",
+      "paths": [
+        "/extras/pymss-denoise/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/127139365",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/5a/dd/f43ece5bddd18da9f575a02d7ffdb32342414e6ad7ac8d1dd7a04138a628",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/pymss-denoise/files/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-denoise/UVR-DeNoise-Lite.pth",
+      "expected_bytes": 17922277,
+      "sha256": "0023492fe98c406817b5253965de19ede65d1c147db015a3a428f07602e99571",
+      "name": "legacy_vr/vr_denoise/UVR-DeNoise-Lite.pth",
+      "paths": [
+        "/extras/pymss-denoise/files/1"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/17922277",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/00/23/492fe98c406817b5253965de19ede65d1c147db015a3a428f07602e99571",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/pymss-dereverb/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-dereverb/UVR-DeReverb-aufr33-jarredou_4band_v4_ms_fullband.pth",
+      "expected_bytes": 58928133,
+      "sha256": "fff726b0adf09f2eadc2151645557db81e1a01fe15d91f9bbbfa9b50a007f1fd",
+      "name": "legacy_vr/vr_dereverb/UVR-DeReverb-aufr33-jarredou_4band_v4_ms_fullband.pth",
+      "paths": [
+        "/extras/pymss-dereverb/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/58928133",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/ff/f7/26b0adf09f2eadc2151645557db81e1a01fe15d91f9bbbfa9b50a007f1fd",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/pymss-harmonic/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-harmonic/Harmonic_Noise_Separation_yxlllc.pth",
+      "expected_bytes": 59320122,
+      "sha256": "d4dd9f8259692f9ceb5b05d86fd53553ef582a1c65184f4cfff2e00cdfe33dd2",
+      "name": "legacy_vr/vr_harmonic_noise/Harmonic_Noise_Separation_yxlllc.pth",
+      "paths": [
+        "/extras/pymss-harmonic/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/59320122",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/d4/dd/9f8259692f9ceb5b05d86fd53553ef582a1c65184f4cfff2e00cdfe33dd2",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/pymss-hp2/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-hp2/7_HP2-UVR.pth",
+      "expected_bytes": 550120123,
+      "sha256": "545ee733b704a263bf6f75328c5ed14f0fb439dcda7a6e8f53c8cecb92877afe",
+      "name": "legacy_vr/vr_hp2/7_HP2-UVR.pth",
+      "paths": [
+        "/extras/pymss-hp2/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/550120123",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/54/5e/e733b704a263bf6f75328c5ed14f0fb439dcda7a6e8f53c8cecb92877afe",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/pymss-hp2/files/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-hp2/8_HP2-UVR.pth",
+      "expected_bytes": 550131079,
+      "sha256": "e072299a87cf3fcdd36da6adc6d2837bed0c07a208775a7678c3d5deeea58f79",
+      "name": "legacy_vr/vr_hp2/8_HP2-UVR.pth",
+      "paths": [
+        "/extras/pymss-hp2/files/1"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/550131079",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/e0/72/299a87cf3fcdd36da6adc6d2837bed0c07a208775a7678c3d5deeea58f79",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/pymss-hp2/files/2",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-hp2/9_HP2-UVR.pth",
+      "expected_bytes": 550131079,
+      "sha256": "a99d032ed8c9d59077a8a41f0ceccb279d59ec10c87102167a283151d25ad9a2",
+      "name": "legacy_vr/vr_hp2/9_HP2-UVR.pth",
+      "paths": [
+        "/extras/pymss-hp2/files/2"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/550131079",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/a9/9d/032ed8c9d59077a8a41f0ceccb279d59ec10c87102167a283151d25ad9a2",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/pymss-inst/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-inst/1_HP-UVR.pth",
+      "expected_bytes": 126792647,
+      "sha256": "d9c654305888fe09668078ade76962b32d3782848f158192da7403a650e935a6",
+      "name": "legacy_vr/vr_instrumental_extraction/1_HP-UVR.pth",
+      "paths": [
+        "/extras/pymss-inst/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/126792647",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/d9/c6/54305888fe09668078ade76962b32d3782848f158192da7403a650e935a6",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/pymss-inst/files/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-inst/2_HP-UVR.pth",
+      "expected_bytes": 126782699,
+      "sha256": "26d6400d2d2e90811ba2381828c8c3519196097375af524c3d0edd969acf5356",
+      "name": "legacy_vr/vr_instrumental_extraction/2_HP-UVR.pth",
+      "paths": [
+        "/extras/pymss-inst/files/1"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/126782699",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/26/d6/400d2d2e90811ba2381828c8c3519196097375af524c3d0edd969acf5356",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/pymss-karaoke/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-karaoke/5_HP-Karaoke-UVR.pth",
+      "expected_bytes": 126782699,
+      "sha256": "fe00891defbb61f4261500af22f7624f1a3df8dc75fa3998d1aece02e6be4537",
+      "name": "legacy_vr/vr_karaoke/5_HP-Karaoke-UVR.pth",
+      "paths": [
+        "/extras/pymss-karaoke/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/126782699",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/fe/00/891defbb61f4261500af22f7624f1a3df8dc75fa3998d1aece02e6be4537",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/pymss-karaoke/files/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-karaoke/6_HP-Karaoke-UVR.pth",
+      "expected_bytes": 126782699,
+      "sha256": "4ce7eaaa9e56f09366b788aebf6d3a72aec8145692c56f1e090e4e7e2d7ce65f",
+      "name": "legacy_vr/vr_karaoke/6_HP-Karaoke-UVR.pth",
+      "paths": [
+        "/extras/pymss-karaoke/files/1"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/126782699",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/4c/e7/eaaa9e56f09366b788aebf6d3a72aec8145692c56f1e090e4e7e2d7ce65f",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/pymss-mgm/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-mgm/MGM_MAIN_v4.pth",
+      "expected_bytes": 31938951,
+      "sha256": "0e6f0c0592333a3b215f61ac1e01f6c24c059f903f0789cf634e92daffae1dce",
+      "name": "legacy_vr/vr_mgm/MGM_MAIN_v4.pth",
+      "paths": [
+        "/extras/pymss-mgm/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/31938951",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/0e/6f/0c0592333a3b215f61ac1e01f6c24c059f903f0789cf634e92daffae1dce",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/pymss-mgm/files/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-mgm/MGM_HIGHEND_v4.pth",
+      "expected_bytes": 31861529,
+      "sha256": "67bf5241072ae938ae0e6bec44d2d8307d9db81a5299382a5cfe12188131f9ce",
+      "name": "legacy_vr/vr_mgm/MGM_HIGHEND_v4.pth",
+      "paths": [
+        "/extras/pymss-mgm/files/1"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/31861529",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/67/bf/5241072ae938ae0e6bec44d2d8307d9db81a5299382a5cfe12188131f9ce",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/pymss-mgm/files/2",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-mgm/MGM_LOWEND_A_v4.pth",
+      "expected_bytes": 31938951,
+      "sha256": "c5def7a35afecde33a77db214b3e9eeff0e47e8329ff5522d33332bc02b4b0e3",
+      "name": "legacy_vr/vr_mgm/MGM_LOWEND_A_v4.pth",
+      "paths": [
+        "/extras/pymss-mgm/files/2"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/31938951",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/c5/de/f7a35afecde33a77db214b3e9eeff0e47e8329ff5522d33332bc02b4b0e3",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/pymss-mgm/files/3",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-mgm/MGM_LOWEND_B_v4.pth",
+      "expected_bytes": 31938951,
+      "sha256": "93d6a08abf6357e5f37d4eb6892267520f5bb9e90f45486b08a0857d5fcb2ec8",
+      "name": "legacy_vr/vr_mgm/MGM_LOWEND_B_v4.pth",
+      "paths": [
+        "/extras/pymss-mgm/files/3"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/31938951",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/93/d6/a08abf6357e5f37d4eb6892267520f5bb9e90f45486b08a0857d5fcb2ec8",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/pymss-sp/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-sp/10_SP-UVR-2B-32000-1.pth",
+      "expected_bytes": 31938951,
+      "sha256": "a178d8a8bc2c992bc5e5a045ef5ab8706d55c375d1bfe34700c1946d6c2d28b6",
+      "name": "legacy_vr/vr_sp/10_SP-UVR-2B-32000-1.pth",
+      "paths": [
+        "/extras/pymss-sp/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/31938951",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/a1/78/d8a8bc2c992bc5e5a045ef5ab8706d55c375d1bfe34700c1946d6c2d28b6",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/pymss-sp/files/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-sp/11_SP-UVR-2B-32000-2.pth",
+      "expected_bytes": 31938951,
+      "sha256": "9e80e69ecd2244496710fa77e7d2c785bad93e2a87a7def65c38272cc9fd1613",
+      "name": "legacy_vr/vr_sp/11_SP-UVR-2B-32000-2.pth",
+      "paths": [
+        "/extras/pymss-sp/files/1"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/31938951",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/9e/80/e69ecd2244496710fa77e7d2c785bad93e2a87a7def65c38272cc9fd1613",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/pymss-sp/files/2",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-sp/12_SP-UVR-3B-44100.pth",
+      "expected_bytes": 31938951,
+      "sha256": "5b826e6a44dbe007bde36c720bb2afeed008348cef1b61e35898fee5282d3918",
+      "name": "legacy_vr/vr_sp/12_SP-UVR-3B-44100.pth",
+      "paths": [
+        "/extras/pymss-sp/files/2"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/31938951",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/5b/82/6e6a44dbe007bde36c720bb2afeed008348cef1b61e35898fee5282d3918",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/pymss-sp/files/3",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-sp/13_SP-UVR-4B-44100-1.pth",
+      "expected_bytes": 31938951,
+      "sha256": "afb84b3d1da4a7e24033e5a0e85dbde2ac5f5e4b1e839788748735ac3bcc5046",
+      "name": "legacy_vr/vr_sp/13_SP-UVR-4B-44100-1.pth",
+      "paths": [
+        "/extras/pymss-sp/files/3"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/31938951",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/af/b8/4b3d1da4a7e24033e5a0e85dbde2ac5f5e4b1e839788748735ac3bcc5046",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/pymss-sp/files/4",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-sp/14_SP-UVR-4B-44100-2.pth",
+      "expected_bytes": 31938951,
+      "sha256": "78404d85d6e4e11a3d2362f6577fc398f77406b7881fbac402e0c6191d6efca1",
+      "name": "legacy_vr/vr_sp/14_SP-UVR-4B-44100-2.pth",
+      "paths": [
+        "/extras/pymss-sp/files/4"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/31938951",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/78/40/4d85d6e4e11a3d2362f6577fc398f77406b7881fbac402e0c6191d6efca1",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/pymss-sp/files/5",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-sp/15_SP-UVR-MID-44100-1.pth",
+      "expected_bytes": 31938951,
+      "sha256": "bd03d4061ce34569e8df9e0a13a235af7ff0d3c0c3def491db4439f9ff344dd0",
+      "name": "legacy_vr/vr_sp/15_SP-UVR-MID-44100-1.pth",
+      "paths": [
+        "/extras/pymss-sp/files/5"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/31938951",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/bd/03/d4061ce34569e8df9e0a13a235af7ff0d3c0c3def491db4439f9ff344dd0",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/pymss-sp/files/6",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-sp/16_SP-UVR-MID-44100-2.pth",
+      "expected_bytes": 31938951,
+      "sha256": "f0e5025987670f963a339db861b078d8526bf912f0ce2e00f732a7f0a3e846cc",
+      "name": "legacy_vr/vr_sp/16_SP-UVR-MID-44100-2.pth",
+      "paths": [
+        "/extras/pymss-sp/files/6"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/31938951",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/f0/e5/025987670f963a339db861b078d8526bf912f0ce2e00f732a7f0a3e846cc",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/pymss-vocal/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-vocal/3_HP-Vocal-UVR.pth",
+      "expected_bytes": 126792647,
+      "sha256": "7d3f9be265b2f2c3d684f23a9905674627c2552e0f6b5f36325cef8dc1f0ff6b",
+      "name": "legacy_vr/vr_vocal_extraction/3_HP-Vocal-UVR.pth",
+      "paths": [
+        "/extras/pymss-vocal/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/126792647",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/7d/3f/9be265b2f2c3d684f23a9905674627c2552e0f6b5f36325cef8dc1f0ff6b",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/pymss-vocal/files/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-vocal/4_HP-Vocal-UVR.pth",
+      "expected_bytes": 126792647,
+      "sha256": "295d1e1e3a52c17a040a4a6fe390214ad8ca0797f091b7c6d8db97d247a27271",
+      "name": "legacy_vr/vr_vocal_extraction/4_HP-Vocal-UVR.pth",
+      "paths": [
+        "/extras/pymss-vocal/files/1"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/126792647",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/29/5d/1e1e3a52c17a040a4a6fe390214ad8ca0797f091b7c6d8db97d247a27271",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/extras/pymss-wind/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/8a94ba4caec8574cda883886d4ddcba68dbf01ee/fabric/extras/pymss-wind/17_HP-Wind_Inst-UVR.pth",
+      "expected_bytes": 223661285,
+      "sha256": "acc6d472b4b478da9c9ab5af45b167749e05a7f65b30c7d5988b3700a513aeee",
+      "name": "legacy_vr/vr_wind_instrumental/17_HP-Wind_Inst-UVR.pth",
+      "paths": [
+        "/extras/pymss-wind/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/223661285",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/ac/c6/d472b4b478da9c9ab5af45b167749e05a7f65b30c7d5988b3700a513aeee",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/gsv-cpp/engine",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/gsv-cpp/gsv-cpp-engine-v2.zip",
+      "expected_bytes": 43623665,
+      "sha256": "265b64a65a9a4bb778978f9702c639fdfae80c79a5f370f290a50dc8442e3837",
+      "name": "gsv-cpp-engine-v2.zip",
+      "paths": [
+        "/gsv-cpp/engine"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/43623665",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/26/5b/64a65a9a4bb778978f9702c639fdfae80c79a5f370f290a50dc8442e3837",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/gsv-cpp/shared",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/gsv-cpp/gsv-cpp-shared-v1.zip",
+      "expected_bytes": 852580206,
+      "sha256": "e369c8d5ed4162c6c08a82a4092678fc476f20416f023c64e294b4619919fd76",
+      "name": "gsv-cpp-shared-v1.zip",
+      "paths": [
+        "/gsv-cpp/shared"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/852580206",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/e3/69/c8d5ed4162c6c08a82a4092678fc476f20416f023c64e294b4619919fd76",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/roles/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/71a0acd8101272ee27d3e1148089f575095f8fa8/models/hayase-yuuka-ja-v5turbo-v1/hayase_yuuka-ja_voice.zip",
+      "expected_bytes": 248479260,
+      "sha256": "4e409dbf866f9df69d18c8c36fb4d98a6ff93d9e2c6507c0f6bf48c251e27514",
+      "name": "早濑优香（日配）",
+      "paths": [
+        "/roles/0",
+        "/voices/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/248479260",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/4e/40/9dbf866f9df69d18c8c36fb4d98a6ff93d9e2c6507c0f6bf48c251e27514",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/runtimes/cpu/parts/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/runtime/runtime-cpu-2026.10.31.tar.gz",
+      "expected_bytes": 594573268,
+      "sha256": "30910118ba208dc6ef599dca060d99bea44f55fc32665b0ed9f53ac816cc989f",
+      "name": "runtime-cpu-2026.10.31.tar.gz",
+      "paths": [
+        "/runtimes/cpu/parts/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/594573268",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/30/91/0118ba208dc6ef599dca060d99bea44f55fc32665b0ed9f53ac816cc989f",
+      "pass": true
+    },
+    {
+      "catalog": "gsv_web",
+      "path": "/runtimes/nvidia/parts/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-gsv-model/resolve/ba30c8ae2d8a533926d664f1691e3b757a6c3902/fabric/runtime/runtime-nvidia-2026.10.31.tar.gz",
+      "expected_bytes": 3956611802,
+      "sha256": "cf923a03d80ea3abc8371e375c0c10ed663543c3c519b9241c5ae9a52eb34fd2",
+      "name": "runtime-nvidia-2026.10.31.tar.gz",
+      "paths": [
+        "/runtimes/nvidia/parts/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/3956611802",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/cf/92/3a03d80ea3abc8371e375c0c10ed663543c3c519b9241c5ae9a52eb34fd2",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pretrained-v2-32k/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pretrained-v2-32k/G32k.pth",
+      "expected_bytes": 73811639,
+      "sha256": "869b26a47f75168d6126f64ac39e6de5247017a8658cfd68aca600f7323efb9f",
+      "name": "G32k.pth",
+      "paths": [
+        "/extras/pretrained-v2-32k/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/73811639",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/86/9b/26a47f75168d6126f64ac39e6de5247017a8658cfd68aca600f7323efb9f",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pretrained-v2-32k/files/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pretrained-v2-32k/D32k.pth",
+      "expected_bytes": 142875703,
+      "sha256": "d8043378cc6619083d385f5a045de09b83fb3bf8de45c433ca863b71723ac3ca",
+      "name": "D32k.pth",
+      "paths": [
+        "/extras/pretrained-v2-32k/files/1"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/142875703",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/d8/04/3378cc6619083d385f5a045de09b83fb3bf8de45c433ca863b71723ac3ca",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pretrained-v2-32k/files/2",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pretrained-v2-32k/f0G32k.pth",
+      "expected_bytes": 73950049,
+      "sha256": "2332611297b8d88c7436de8f17ef5f07a2119353e962cd93cda5806d59a1133d",
+      "name": "f0G32k.pth",
+      "paths": [
+        "/extras/pretrained-v2-32k/files/2"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/73950049",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/23/32/611297b8d88c7436de8f17ef5f07a2119353e962cd93cda5806d59a1133d",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pretrained-v2-32k/files/3",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pretrained-v2-32k/f0D32k.pth",
+      "expected_bytes": 142875703,
+      "sha256": "bd7134e7793674c85474d5145d2d982e3c5d8124fc7bb6c20f710ed65808fa8a",
+      "name": "f0D32k.pth",
+      "paths": [
+        "/extras/pretrained-v2-32k/files/3"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/142875703",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/bd/71/34e7793674c85474d5145d2d982e3c5d8124fc7bb6c20f710ed65808fa8a",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pretrained-v2-40k/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pretrained-v2-40k/G40k.pth",
+      "expected_bytes": 72959671,
+      "sha256": "a3843da7fde33db1dab176146c70d6c2df06eafe9457f4e3aa10024e9c6a4b69",
+      "name": "G40k.pth",
+      "paths": [
+        "/extras/pretrained-v2-40k/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/72959671",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/a3/84/3da7fde33db1dab176146c70d6c2df06eafe9457f4e3aa10024e9c6a4b69",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pretrained-v2-40k/files/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pretrained-v2-40k/D40k.pth",
+      "expected_bytes": 142875703,
+      "sha256": "471378e894e7191f89a94eda8288c5947b16bbe0b10c3f1f17efdb7a1d998242",
+      "name": "D40k.pth",
+      "paths": [
+        "/extras/pretrained-v2-40k/files/1"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/142875703",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/47/13/78e894e7191f89a94eda8288c5947b16bbe0b10c3f1f17efdb7a1d998242",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pretrained-v2-40k/files/2",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pretrained-v2-40k/f0G40k.pth",
+      "expected_bytes": 73106273,
+      "sha256": "3b2c44035e782c4b14ddc0bede9e2f4a724d025cd073f736d4f43708453adfcb",
+      "name": "f0G40k.pth",
+      "paths": [
+        "/extras/pretrained-v2-40k/files/2"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/73106273",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/3b/2c/44035e782c4b14ddc0bede9e2f4a724d025cd073f736d4f43708453adfcb",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pretrained-v2-40k/files/3",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pretrained-v2-40k/f0D40k.pth",
+      "expected_bytes": 142875703,
+      "sha256": "6b6ab091e70801b28e3f41f335f2fc5f3f35c75b39ae2628d419644ec2b0fa09",
+      "name": "f0D40k.pth",
+      "paths": [
+        "/extras/pretrained-v2-40k/files/3"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/142875703",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/6b/6a/b091e70801b28e3f41f335f2fc5f3f35c75b39ae2628d419644ec2b0fa09",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pretrained-v2-48k/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pretrained-v2-48k/G48k.pth",
+      "expected_bytes": 75318967,
+      "sha256": "2e2b1581a436d07a76b10b9d38765f64aa02836dc65c7dee1ce4140c11ea158b",
+      "name": "G48k.pth",
+      "paths": [
+        "/extras/pretrained-v2-48k/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/75318967",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/2e/2b/1581a436d07a76b10b9d38765f64aa02836dc65c7dee1ce4140c11ea158b",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pretrained-v2-48k/files/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pretrained-v2-48k/D48k.pth",
+      "expected_bytes": 142875703,
+      "sha256": "db01094a93c09868a278e03dafe8bb781bfcc1a5ba8df168c948bf9168c84d82",
+      "name": "D48k.pth",
+      "paths": [
+        "/extras/pretrained-v2-48k/files/1"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/142875703",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/db/01/094a93c09868a278e03dafe8bb781bfcc1a5ba8df168c948bf9168c84d82",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pretrained-v2-48k/files/2",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pretrained-v2-48k/f0G48k.pth",
+      "expected_bytes": 75465569,
+      "sha256": "b5d51f589cc3632d4eae36a315b4179397695042edc01d15312e1bddc2b764a4",
+      "name": "f0G48k.pth",
+      "paths": [
+        "/extras/pretrained-v2-48k/files/2"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/75465569",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/b5/d5/1f589cc3632d4eae36a315b4179397695042edc01d15312e1bddc2b764a4",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pretrained-v2-48k/files/3",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pretrained-v2-48k/f0D48k.pth",
+      "expected_bytes": 142875703,
+      "sha256": "2269b73c7a4cf34da09aea99274dabf99b2ddb8a42cbfb065fb3c0aa9a2fc748",
+      "name": "f0D48k.pth",
+      "paths": [
+        "/extras/pretrained-v2-48k/files/3"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/142875703",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/22/69/b73c7a4cf34da09aea99274dabf99b2ddb8a42cbfb065fb3c0aa9a2fc748",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pymss-bve/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-bve/UVR-BVE-4B_SN-44100-1.pth",
+      "expected_bytes": 223650277,
+      "sha256": "56165bdfa0dd5df7930ff76652200dc287e1bfef622bba5c812c736dc22067fe",
+      "name": "legacy_vr/vr_backing_vocal/UVR-BVE-4B_SN-44100-1.pth",
+      "paths": [
+        "/extras/pymss-bve/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/223650277",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/56/16/5bdfa0dd5df7930ff76652200dc287e1bfef622bba5c812c736dc22067fe",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pymss-deecho/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-deecho/UVR-De-Echo-Normal.pth",
+      "expected_bytes": 127139365,
+      "sha256": "b849dd575643b075c257fb7a96c2ef5a79d7a5e7df74a2b319ad47118f1ee769",
+      "name": "legacy_vr/vr_deecho/UVR-De-Echo-Normal.pth",
+      "paths": [
+        "/extras/pymss-deecho/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/127139365",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/b8/49/dd575643b075c257fb7a96c2ef5a79d7a5e7df74a2b319ad47118f1ee769",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pymss-deecho/files/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-deecho/UVR-De-Echo-Aggressive.pth",
+      "expected_bytes": 127139365,
+      "sha256": "1bd1d79d9c5d1b17d20f96f8a9f8aff1b55a83014f70712446bf420c0188e0a0",
+      "name": "legacy_vr/vr_deecho/UVR-De-Echo-Aggressive.pth",
+      "paths": [
+        "/extras/pymss-deecho/files/1"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/127139365",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/1b/d1/d79d9c5d1b17d20f96f8a9f8aff1b55a83014f70712446bf420c0188e0a0",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pymss-deecho/files/2",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-deecho/UVR-DeEcho-DeReverb.pth",
+      "expected_bytes": 223650277,
+      "sha256": "e644028ec82865dc0fe082bc6fea85a43f7c71cfe375caee2da2d154aa661ee7",
+      "name": "legacy_vr/vr_deecho_dereverb/UVR-DeEcho-DeReverb.pth",
+      "paths": [
+        "/extras/pymss-deecho/files/2"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/223650277",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/e6/44/028ec82865dc0fe082bc6fea85a43f7c71cfe375caee2da2d154aa661ee7",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pymss-denoise/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-denoise/UVR-DeNoise.pth",
+      "expected_bytes": 127139365,
+      "sha256": "5addf43ece5bddd18da9f575a02d7ffdb32342414e6ad7ac8d1dd7a04138a628",
+      "name": "legacy_vr/vr_denoise/UVR-DeNoise.pth",
+      "paths": [
+        "/extras/pymss-denoise/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/127139365",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/5a/dd/f43ece5bddd18da9f575a02d7ffdb32342414e6ad7ac8d1dd7a04138a628",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pymss-denoise/files/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-denoise/UVR-DeNoise-Lite.pth",
+      "expected_bytes": 17922277,
+      "sha256": "0023492fe98c406817b5253965de19ede65d1c147db015a3a428f07602e99571",
+      "name": "legacy_vr/vr_denoise/UVR-DeNoise-Lite.pth",
+      "paths": [
+        "/extras/pymss-denoise/files/1"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/17922277",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/00/23/492fe98c406817b5253965de19ede65d1c147db015a3a428f07602e99571",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pymss-dereverb/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-dereverb/UVR-DeReverb-aufr33-jarredou_4band_v4_ms_fullband.pth",
+      "expected_bytes": 58928133,
+      "sha256": "fff726b0adf09f2eadc2151645557db81e1a01fe15d91f9bbbfa9b50a007f1fd",
+      "name": "legacy_vr/vr_dereverb/UVR-DeReverb-aufr33-jarredou_4band_v4_ms_fullband.pth",
+      "paths": [
+        "/extras/pymss-dereverb/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/58928133",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/ff/f7/26b0adf09f2eadc2151645557db81e1a01fe15d91f9bbbfa9b50a007f1fd",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pymss-harmonic/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-harmonic/Harmonic_Noise_Separation_yxlllc.pth",
+      "expected_bytes": 59320122,
+      "sha256": "d4dd9f8259692f9ceb5b05d86fd53553ef582a1c65184f4cfff2e00cdfe33dd2",
+      "name": "legacy_vr/vr_harmonic_noise/Harmonic_Noise_Separation_yxlllc.pth",
+      "paths": [
+        "/extras/pymss-harmonic/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/59320122",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/d4/dd/9f8259692f9ceb5b05d86fd53553ef582a1c65184f4cfff2e00cdfe33dd2",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pymss-hp2/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-hp2/7_HP2-UVR.pth",
+      "expected_bytes": 550120123,
+      "sha256": "545ee733b704a263bf6f75328c5ed14f0fb439dcda7a6e8f53c8cecb92877afe",
+      "name": "legacy_vr/vr_hp2/7_HP2-UVR.pth",
+      "paths": [
+        "/extras/pymss-hp2/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/550120123",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/54/5e/e733b704a263bf6f75328c5ed14f0fb439dcda7a6e8f53c8cecb92877afe",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pymss-hp2/files/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-hp2/8_HP2-UVR.pth",
+      "expected_bytes": 550131079,
+      "sha256": "e072299a87cf3fcdd36da6adc6d2837bed0c07a208775a7678c3d5deeea58f79",
+      "name": "legacy_vr/vr_hp2/8_HP2-UVR.pth",
+      "paths": [
+        "/extras/pymss-hp2/files/1"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/550131079",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/e0/72/299a87cf3fcdd36da6adc6d2837bed0c07a208775a7678c3d5deeea58f79",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pymss-hp2/files/2",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-hp2/9_HP2-UVR.pth",
+      "expected_bytes": 550131079,
+      "sha256": "a99d032ed8c9d59077a8a41f0ceccb279d59ec10c87102167a283151d25ad9a2",
+      "name": "legacy_vr/vr_hp2/9_HP2-UVR.pth",
+      "paths": [
+        "/extras/pymss-hp2/files/2"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/550131079",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/a9/9d/032ed8c9d59077a8a41f0ceccb279d59ec10c87102167a283151d25ad9a2",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pymss-inst/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-inst/1_HP-UVR.pth",
+      "expected_bytes": 126792647,
+      "sha256": "d9c654305888fe09668078ade76962b32d3782848f158192da7403a650e935a6",
+      "name": "legacy_vr/vr_instrumental_extraction/1_HP-UVR.pth",
+      "paths": [
+        "/extras/pymss-inst/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/126792647",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/d9/c6/54305888fe09668078ade76962b32d3782848f158192da7403a650e935a6",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pymss-inst/files/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-inst/2_HP-UVR.pth",
+      "expected_bytes": 126782699,
+      "sha256": "26d6400d2d2e90811ba2381828c8c3519196097375af524c3d0edd969acf5356",
+      "name": "legacy_vr/vr_instrumental_extraction/2_HP-UVR.pth",
+      "paths": [
+        "/extras/pymss-inst/files/1"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/126782699",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/26/d6/400d2d2e90811ba2381828c8c3519196097375af524c3d0edd969acf5356",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pymss-karaoke/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-karaoke/5_HP-Karaoke-UVR.pth",
+      "expected_bytes": 126782699,
+      "sha256": "fe00891defbb61f4261500af22f7624f1a3df8dc75fa3998d1aece02e6be4537",
+      "name": "legacy_vr/vr_karaoke/5_HP-Karaoke-UVR.pth",
+      "paths": [
+        "/extras/pymss-karaoke/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/126782699",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/fe/00/891defbb61f4261500af22f7624f1a3df8dc75fa3998d1aece02e6be4537",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pymss-karaoke/files/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-karaoke/6_HP-Karaoke-UVR.pth",
+      "expected_bytes": 126782699,
+      "sha256": "4ce7eaaa9e56f09366b788aebf6d3a72aec8145692c56f1e090e4e7e2d7ce65f",
+      "name": "legacy_vr/vr_karaoke/6_HP-Karaoke-UVR.pth",
+      "paths": [
+        "/extras/pymss-karaoke/files/1"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/126782699",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/4c/e7/eaaa9e56f09366b788aebf6d3a72aec8145692c56f1e090e4e7e2d7ce65f",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pymss-mgm/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-mgm/MGM_MAIN_v4.pth",
+      "expected_bytes": 31938951,
+      "sha256": "0e6f0c0592333a3b215f61ac1e01f6c24c059f903f0789cf634e92daffae1dce",
+      "name": "legacy_vr/vr_mgm/MGM_MAIN_v4.pth",
+      "paths": [
+        "/extras/pymss-mgm/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/31938951",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/0e/6f/0c0592333a3b215f61ac1e01f6c24c059f903f0789cf634e92daffae1dce",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pymss-mgm/files/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-mgm/MGM_HIGHEND_v4.pth",
+      "expected_bytes": 31861529,
+      "sha256": "67bf5241072ae938ae0e6bec44d2d8307d9db81a5299382a5cfe12188131f9ce",
+      "name": "legacy_vr/vr_mgm/MGM_HIGHEND_v4.pth",
+      "paths": [
+        "/extras/pymss-mgm/files/1"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/31861529",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/67/bf/5241072ae938ae0e6bec44d2d8307d9db81a5299382a5cfe12188131f9ce",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pymss-mgm/files/2",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-mgm/MGM_LOWEND_A_v4.pth",
+      "expected_bytes": 31938951,
+      "sha256": "c5def7a35afecde33a77db214b3e9eeff0e47e8329ff5522d33332bc02b4b0e3",
+      "name": "legacy_vr/vr_mgm/MGM_LOWEND_A_v4.pth",
+      "paths": [
+        "/extras/pymss-mgm/files/2"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/31938951",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/c5/de/f7a35afecde33a77db214b3e9eeff0e47e8329ff5522d33332bc02b4b0e3",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pymss-mgm/files/3",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-mgm/MGM_LOWEND_B_v4.pth",
+      "expected_bytes": 31938951,
+      "sha256": "93d6a08abf6357e5f37d4eb6892267520f5bb9e90f45486b08a0857d5fcb2ec8",
+      "name": "legacy_vr/vr_mgm/MGM_LOWEND_B_v4.pth",
+      "paths": [
+        "/extras/pymss-mgm/files/3"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/31938951",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/93/d6/a08abf6357e5f37d4eb6892267520f5bb9e90f45486b08a0857d5fcb2ec8",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pymss-sp/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-sp/10_SP-UVR-2B-32000-1.pth",
+      "expected_bytes": 31938951,
+      "sha256": "a178d8a8bc2c992bc5e5a045ef5ab8706d55c375d1bfe34700c1946d6c2d28b6",
+      "name": "legacy_vr/vr_sp/10_SP-UVR-2B-32000-1.pth",
+      "paths": [
+        "/extras/pymss-sp/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/31938951",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/a1/78/d8a8bc2c992bc5e5a045ef5ab8706d55c375d1bfe34700c1946d6c2d28b6",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pymss-sp/files/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-sp/11_SP-UVR-2B-32000-2.pth",
+      "expected_bytes": 31938951,
+      "sha256": "9e80e69ecd2244496710fa77e7d2c785bad93e2a87a7def65c38272cc9fd1613",
+      "name": "legacy_vr/vr_sp/11_SP-UVR-2B-32000-2.pth",
+      "paths": [
+        "/extras/pymss-sp/files/1"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/31938951",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/9e/80/e69ecd2244496710fa77e7d2c785bad93e2a87a7def65c38272cc9fd1613",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pymss-sp/files/2",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-sp/12_SP-UVR-3B-44100.pth",
+      "expected_bytes": 31938951,
+      "sha256": "5b826e6a44dbe007bde36c720bb2afeed008348cef1b61e35898fee5282d3918",
+      "name": "legacy_vr/vr_sp/12_SP-UVR-3B-44100.pth",
+      "paths": [
+        "/extras/pymss-sp/files/2"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/31938951",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/5b/82/6e6a44dbe007bde36c720bb2afeed008348cef1b61e35898fee5282d3918",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pymss-sp/files/3",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-sp/13_SP-UVR-4B-44100-1.pth",
+      "expected_bytes": 31938951,
+      "sha256": "afb84b3d1da4a7e24033e5a0e85dbde2ac5f5e4b1e839788748735ac3bcc5046",
+      "name": "legacy_vr/vr_sp/13_SP-UVR-4B-44100-1.pth",
+      "paths": [
+        "/extras/pymss-sp/files/3"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/31938951",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/af/b8/4b3d1da4a7e24033e5a0e85dbde2ac5f5e4b1e839788748735ac3bcc5046",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pymss-sp/files/4",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-sp/14_SP-UVR-4B-44100-2.pth",
+      "expected_bytes": 31938951,
+      "sha256": "78404d85d6e4e11a3d2362f6577fc398f77406b7881fbac402e0c6191d6efca1",
+      "name": "legacy_vr/vr_sp/14_SP-UVR-4B-44100-2.pth",
+      "paths": [
+        "/extras/pymss-sp/files/4"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/31938951",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/78/40/4d85d6e4e11a3d2362f6577fc398f77406b7881fbac402e0c6191d6efca1",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pymss-sp/files/5",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-sp/15_SP-UVR-MID-44100-1.pth",
+      "expected_bytes": 31938951,
+      "sha256": "bd03d4061ce34569e8df9e0a13a235af7ff0d3c0c3def491db4439f9ff344dd0",
+      "name": "legacy_vr/vr_sp/15_SP-UVR-MID-44100-1.pth",
+      "paths": [
+        "/extras/pymss-sp/files/5"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/31938951",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/bd/03/d4061ce34569e8df9e0a13a235af7ff0d3c0c3def491db4439f9ff344dd0",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pymss-sp/files/6",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-sp/16_SP-UVR-MID-44100-2.pth",
+      "expected_bytes": 31938951,
+      "sha256": "f0e5025987670f963a339db861b078d8526bf912f0ce2e00f732a7f0a3e846cc",
+      "name": "legacy_vr/vr_sp/16_SP-UVR-MID-44100-2.pth",
+      "paths": [
+        "/extras/pymss-sp/files/6"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/31938951",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/f0/e5/025987670f963a339db861b078d8526bf912f0ce2e00f732a7f0a3e846cc",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pymss-vocal/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-vocal/3_HP-Vocal-UVR.pth",
+      "expected_bytes": 126792647,
+      "sha256": "7d3f9be265b2f2c3d684f23a9905674627c2552e0f6b5f36325cef8dc1f0ff6b",
+      "name": "legacy_vr/vr_vocal_extraction/3_HP-Vocal-UVR.pth",
+      "paths": [
+        "/extras/pymss-vocal/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/126792647",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/7d/3f/9be265b2f2c3d684f23a9905674627c2552e0f6b5f36325cef8dc1f0ff6b",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pymss-vocal/files/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-vocal/4_HP-Vocal-UVR.pth",
+      "expected_bytes": 126792647,
+      "sha256": "295d1e1e3a52c17a040a4a6fe390214ad8ca0797f091b7c6d8db97d247a27271",
+      "name": "legacy_vr/vr_vocal_extraction/4_HP-Vocal-UVR.pth",
+      "paths": [
+        "/extras/pymss-vocal/files/1"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/126792647",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/29/5d/1e1e3a52c17a040a4a6fe390214ad8ca0797f091b7c6d8db97d247a27271",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/extras/pymss-wind/files/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-wind/17_HP-Wind_Inst-UVR.pth",
+      "expected_bytes": 223661285,
+      "sha256": "acc6d472b4b478da9c9ab5af45b167749e05a7f65b30c7d5988b3700a513aeee",
+      "name": "legacy_vr/vr_wind_instrumental/17_HP-Wind_Inst-UVR.pth",
+      "paths": [
+        "/extras/pymss-wind/files/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/223661285",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/ac/c6/d472b4b478da9c9ab5af45b167749e05a7f65b30c7d5988b3700a513aeee",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/packages/engine_core/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/engine-core/engine-core-260722.zip",
+      "expected_bytes": 753796337,
+      "sha256": "ecb3231c7d26ad553e902ac24d40daf3d3fbe5786a7d8e78af8038fc389cab47",
+      "name": "engine-core-260722.zip",
+      "paths": [
+        "/packages/engine_core/0",
+        "/engine_core"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/753796337",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/ec/b3/231c7d26ad553e902ac24d40daf3d3fbe5786a7d8e78af8038fc389cab47",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/packages/runtime/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/19fad1f49c58719c3a15f78f277e9755f5732c17/fabric/runtime/runtime-nvidia-2026.07.21.tar",
+      "expected_bytes": 6077133824,
+      "sha256": "d76ac4e8140490bda1abac8df2718bfec95f8a696c8a5ba730a5e7e901421d9b",
+      "name": "runtime-nvidia-2026.07.21.tar",
+      "paths": [
+        "/packages/runtime/0",
+        "/runtimes/nvidia/parts/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/6077133824",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/d7/6a/c4e8140490bda1abac8df2718bfec95f8a696c8a5ba730a5e7e901421d9b",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/packages/runtime/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/19fad1f49c58719c3a15f78f277e9755f5732c17/fabric/runtime/runtime-amd-2026.07.21.tar",
+      "expected_bytes": 1801268224,
+      "sha256": "5d5e4437c70ac1cf368232829381170d5a88f457eed20d14d35b1ef155dd0274",
+      "name": "runtime-amd-2026.07.21.tar",
+      "paths": [
+        "/packages/runtime/1",
+        "/runtimes/amd/parts/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/1801268224",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/5d/5e/4437c70ac1cf368232829381170d5a88f457eed20d14d35b1ef155dd0274",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/packages/runtime/2",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/9a0685e5c794f2a183561dddacfd94f23cf0eef7/fabric/runtime/runtime-nvidia50-2026.07.21.tar",
+      "expected_bytes": 6698774016,
+      "sha256": "a828e13e23589447f25b16b9314b6d730a1a7701e973613bc97d80a026102489",
+      "name": "runtime-nvidia50-2026.07.21.tar",
+      "paths": [
+        "/packages/runtime/2",
+        "/runtimes/nvidia50/parts/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/6698774016",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/a8/28/e13e23589447f25b16b9314b6d730a1a7701e973613bc97d80a026102489",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/packages/vbcable/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/vbcable/vbcable-setup.zip",
+      "expected_bytes": 1299644,
+      "sha256": "0518435a76264856e4e2733ac22143ff16595c763cbf58106ed04d6895c6ddf5",
+      "name": "VB-Cable Setup Pack",
+      "paths": [
+        "/packages/vbcable/0",
+        "/vbcable"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/1299644",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/05/18/435a76264856e4e2733ac22143ff16595c763cbf58106ed04d6895c6ddf5",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/voices/0",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/bd6eb6155af4eabbe100e3fbd4ace25c9d936b81/reposts/guanguan-v2.zip",
+      "expected_bytes": 51006395,
+      "sha256": "dfb9a54afe78a95b32f1742090bd55541c28a205f3f958884247e4a454e2aeb3",
+      "name": "guanguanV1",
+      "paths": [
+        "/voices/0"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/51006395",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/df/b9/a54afe78a95b32f1742090bd55541c28a205f3f958884247e4a454e2aeb3",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/voices/1",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/bd6eb6155af4eabbe100e3fbd4ace25c9d936b81/reposts/keruan-v2.zip",
+      "expected_bytes": 51012498,
+      "sha256": "c7cf492fcf0f39d62dbbab6fae6524a68368e8df7568e289cf6336d717432cc6",
+      "name": "keruanV1",
+      "paths": [
+        "/voices/1"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/51012498",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/c7/cf/492fcf0f39d62dbbab6fae6524a68368e8df7568e289cf6336d717432cc6",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/voices/10",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/voices/Hoshino-JP-v2.zip",
+      "expected_bytes": 208437667,
+      "sha256": "0e8172244eed30ed060572ba4205e0617e05dcd88d0fb9a9d2b36d656f2a49a0",
+      "name": "小鸟游星野（日配）",
+      "paths": [
+        "/voices/10"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/208437667",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/0e/81/72244eed30ed060572ba4205e0617e05dcd88d0fb9a9d2b36d656f2a49a0",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/voices/11",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/voices/Hoshino-ZH-v2.zip",
+      "expected_bytes": 178234504,
+      "sha256": "6cc61b889ef16fcaf32a31a208257471be3eac1a34fd7162769717a40ca11c88",
+      "name": "小鸟游星野（中配）",
+      "paths": [
+        "/voices/11"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/178234504",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/6c/c6/1b889ef16fcaf32a31a208257471be3eac1a34fd7162769717a40ca11c88",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/voices/12",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/voices/Serika-JP-v2.zip",
+      "expected_bytes": 217069942,
+      "sha256": "225804a92cfda8f41d7a6b946445ed5199a56b7ed660cbe76e08c22a0e67759b",
+      "name": "黑见芹香（日配）",
+      "paths": [
+        "/voices/12"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/217069942",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/22/58/04a92cfda8f41d7a6b946445ed5199a56b7ed660cbe76e08c22a0e67759b",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/voices/13",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/voices/Serika-ZH-v2.zip",
+      "expected_bytes": 155249760,
+      "sha256": "18ad5b81b341f9526bae1e26b871d4373ecaf10e7b588fc5154054273ef1f3c9",
+      "name": "黑见芹香（中配）",
+      "paths": [
+        "/voices/13"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/155249760",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/18/ad/5b81b341f9526bae1e26b871d4373ecaf10e7b588fc5154054273ef1f3c9",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/voices/14",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/voices/Alice-JP-v2.zip",
+      "expected_bytes": 184688294,
+      "sha256": "cce46b79c3d6b7b28dab16801f46c80321b60e9ee5b3f775885ead1665467b8e",
+      "name": "天童爱丽丝（日配）",
+      "paths": [
+        "/voices/14"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/184688294",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/cc/e4/6b79c3d6b7b28dab16801f46c80321b60e9ee5b3f775885ead1665467b8e",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/voices/15",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/voices/Alice-ZH-v2.zip",
+      "expected_bytes": 120882353,
+      "sha256": "059b0f7d64b72829f6ab22add3488fca772506a3808460c7b1db9c3d6f667a5b",
+      "name": "天童爱丽丝（中配）",
+      "paths": [
+        "/voices/15"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/120882353",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/05/9b/0f7d64b72829f6ab22add3488fca772506a3808460c7b1db9c3d6f667a5b",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/voices/16",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/voices/Hina-JP-v2.zip",
+      "expected_bytes": 167687918,
+      "sha256": "68bb029a2b9db350a5d4fa3f7aa7d2c2fa5215bdef52bab862f49a1649853364",
+      "name": "空崎日奈（日配）",
+      "paths": [
+        "/voices/16"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/167687918",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/68/bb/029a2b9db350a5d4fa3f7aa7d2c2fa5215bdef52bab862f49a1649853364",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/voices/17",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/voices/Hina-ZH-v2.zip",
+      "expected_bytes": 168995388,
+      "sha256": "8fafbd6bbeed83fde352db38da7fede61ebcc5c24e7b685848dcca1365a99066",
+      "name": "空崎日奈（中配）",
+      "paths": [
+        "/voices/17"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/168995388",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/8f/af/bd6bbeed83fde352db38da7fede61ebcc5c24e7b685848dcca1365a99066",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/voices/18",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/voices/Mari-JP-v2.zip",
+      "expected_bytes": 144363283,
+      "sha256": "6060cf7462926d802fd95de3137d48e755aa8dc9a568f5db51875d4699391060",
+      "name": "伊落玛丽（日配）",
+      "paths": [
+        "/voices/18"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/144363283",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/60/60/cf7462926d802fd95de3137d48e755aa8dc9a568f5db51875d4699391060",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/voices/19",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/voices/Mari-ZH-v2.zip",
+      "expected_bytes": 140199848,
+      "sha256": "95c8ab87e3999aaaec7c8740896e910760f76b0dcc9bc9051c92c1825ea38a4e",
+      "name": "伊落玛丽（中配）",
+      "paths": [
+        "/voices/19"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/140199848",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/95/c8/ab87e3999aaaec7c8740896e910760f76b0dcc9bc9051c92c1825ea38a4e",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/voices/2",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/bd6eb6155af4eabbe100e3fbd4ace25c9d936b81/reposts/kiki-v2.zip",
+      "expected_bytes": 51021019,
+      "sha256": "1b6e11604e16dba50398b514dae8729d274d430edac2f08874d587c5bb6bd926",
+      "name": "kikiV1",
+      "paths": [
+        "/voices/2"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/51021019",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/1b/6e/11604e16dba50398b514dae8729d274d430edac2f08874d587c5bb6bd926",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/voices/20",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/voices/Toki-JP-v2.zip",
+      "expected_bytes": 199984662,
+      "sha256": "c2560b3699195be95c38ed84f709b30655ab27cf3f8b942579ccffb09cab79c4",
+      "name": "飞鸟马时（日配）",
+      "paths": [
+        "/voices/20"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/199984662",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/c2/56/0b3699195be95c38ed84f709b30655ab27cf3f8b942579ccffb09cab79c4",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/voices/21",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/voices/Toki-ZH-v2.zip",
+      "expected_bytes": 133282614,
+      "sha256": "59d94b9934b1a7cbf6cc6c036ab6eb24e5be8515f9c35a2dd44fbcfb34c095d5",
+      "name": "飞鸟马时（中配）",
+      "paths": [
+        "/voices/21"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/133282614",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/59/d9/4b9934b1a7cbf6cc6c036ab6eb24e5be8515f9c35a2dd44fbcfb34c095d5",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/voices/22",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/voices/Yuuka-JP-v2.zip",
+      "expected_bytes": 242136000,
+      "sha256": "45e159f546b549cf932e3a5efad03af29dc6cc4bd4117d442485c0f23e8696c9",
+      "name": "早濑优香（日配）",
+      "paths": [
+        "/voices/22"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/242136000",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/45/e1/59f546b549cf932e3a5efad03af29dc6cc4bd4117d442485c0f23e8696c9",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/voices/23",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/voices/Yuuka-ZH-v2.zip",
+      "expected_bytes": 169957208,
+      "sha256": "e1ee94859ad358dae5d99f2da58ab34dde75f0d469a0625ffc546dd92c130eb2",
+      "name": "早濑优香（中配）",
+      "paths": [
+        "/voices/23"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/169957208",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/e1/ee/94859ad358dae5d99f2da58ab34dde75f0d469a0625ffc546dd92c130eb2",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/voices/24",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/bd6eb6155af4eabbe100e3fbd4ace25c9d936b81/reposts/Nanami-JP-v1.zip",
+      "expected_bytes": 332274747,
+      "sha256": "78bf957939774dcc304260efa527bc3811a046cf45b8276966c27ce395590733",
+      "name": "七海千秋（日语）",
+      "paths": [
+        "/voices/24"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/332274747",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/78/bf/957939774dcc304260efa527bc3811a046cf45b8276966c27ce395590733",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/voices/3",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/bd6eb6155af4eabbe100e3fbd4ace25c9d936b81/reposts/youzhanv2-xi-v2.zip",
+      "expected_bytes": 53357394,
+      "sha256": "6ff5a598f728c116c8c4001b81ed32cc81f46754f6833970920aea0f445b91e1",
+      "name": "youzhanv2-xi",
+      "paths": [
+        "/voices/3"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/53357394",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/6f/f5/a598f728c116c8c4001b81ed32cc81f46754f6833970920aea0f445b91e1",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/voices/4",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/bd6eb6155af4eabbe100e3fbd4ace25c9d936b81/reposts/Anon-v1.zip",
+      "expected_bytes": 82531532,
+      "sha256": "35916208f204b4c48f5e3e27df11976d2b9175bec93afe90ae5ce2b4ec649458",
+      "name": "千早爱音",
+      "paths": [
+        "/voices/4"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/82531532",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/35/91/6208f204b4c48f5e3e27df11976d2b9175bec93afe90ae5ce2b4ec649458",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/voices/5",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/bd6eb6155af4eabbe100e3fbd4ace25c9d936b81/reposts/Rana-v1.zip",
+      "expected_bytes": 129503551,
+      "sha256": "6891050421a66bb526b5fceae6dec2521191b37cfb4b0d358a80a315c52b88c1",
+      "name": "要乐奈",
+      "paths": [
+        "/voices/5"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/129503551",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/68/91/050421a66bb526b5fceae6dec2521191b37cfb4b0d358a80a315c52b88c1",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/voices/6",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/bd6eb6155af4eabbe100e3fbd4ace25c9d936b81/reposts/Soyo-v1.zip",
+      "expected_bytes": 207948470,
+      "sha256": "8c8e78f7ee4255bffa9b8b00e651fb42bc143cf2460e5b12a787f723eae9e2fd",
+      "name": "长崎爽世",
+      "paths": [
+        "/voices/6"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/207948470",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/8c/8e/78f7ee4255bffa9b8b00e651fb42bc143cf2460e5b12a787f723eae9e2fd",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/voices/7",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/bd6eb6155af4eabbe100e3fbd4ace25c9d936b81/reposts/Taki-v1.zip",
+      "expected_bytes": 333192756,
+      "sha256": "9c53e8964737d534e558bf7339d393ccd9f82b35ec5d0d37c6d74b6e1374d96b",
+      "name": "椎名立希",
+      "paths": [
+        "/voices/7"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/333192756",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/9c/53/e8964737d534e558bf7339d393ccd9f82b35ec5d0d37c6d74b6e1374d96b",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/voices/8",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/bd6eb6155af4eabbe100e3fbd4ace25c9d936b81/reposts/Tomori-v1.zip",
+      "expected_bytes": 430166654,
+      "sha256": "c64a9446328ed8c2d57056d07d6b6ac909e04c9717efcfb02280cbcd90969112",
+      "name": "高松灯",
+      "paths": [
+        "/voices/8"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/430166654",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/c6/4a/9446328ed8c2d57056d07d6b6ac909e04c9717efcfb02280cbcd90969112",
+      "pass": true
+    },
+    {
+      "catalog": "rvc_cnb",
+      "path": "/voices/9",
+      "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/voices/Kei-v2.zip",
+      "expected_bytes": 113461951,
+      "sha256": "01c2cd9261b0f87f19e709891bce04775f7e83ad5ee7c17f5769739a1ff1cc4c",
+      "name": "凯伊",
+      "paths": [
+        "/voices/9"
+      ],
+      "status": 206,
+      "content_range": "bytes 0-0/113461951",
+      "received_bytes": 1,
+      "final_url_without_query": "https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/01/c2/cd9261b0f87f19e709891bce04775f7e83ad5ee7c17f5769739a1ff1cc4c",
+      "pass": true
+    }
+  ],
+  "unique_urls": 121
+}

@@ -311,3 +311,119 @@ fn live_modelscope_runtime_downloads() {
         "Acceptance failures: {rows:?}"
     );
 }
+
+#[test]
+#[ignore = "Read-only live acceptance for VB-Cable, the smallest voice pack and extra file"]
+fn live_modelscope_all_files_downloads() {
+    let product = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()
+        .unwrap();
+    let dir = product
+        .join("User_Data/e2e-ms-all")
+        .join(format!("rvc-client-{}", std::process::id()));
+    fs::create_dir_all(&dir).unwrap();
+    crate::logging::init(&dir);
+    let data = catalog::fetch_remote_catalog(60).expect("Read current online catalog");
+    fs::write(
+        dir.join("catalog.json"),
+        serde_json::to_vec_pretty(&data).unwrap(),
+    )
+    .unwrap();
+    let voice = data["voices"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|v| v["pack_url"].as_str().is_some() && v["size_bytes"].as_u64().unwrap_or(0) > 0)
+        .min_by_key(|v| v["size_bytes"].as_u64().unwrap())
+        .unwrap();
+    let extra = data["extras"]
+        .as_object()
+        .unwrap()
+        .values()
+        .flat_map(|v| v["files"].as_array().into_iter().flatten())
+        .filter(|v| v["size_bytes"].as_u64().unwrap_or(0) > 0)
+        .min_by_key(|v| v["size_bytes"].as_u64().unwrap())
+        .unwrap();
+    let mut rows = Vec::new();
+    for (key, entry, kind) in [
+        ("vbcable", &data["vbcable"], DownloadKind::Dependency),
+        ("voice", voice, DownloadKind::VoicePack),
+        ("extra", extra, DownloadKind::Generic),
+    ] {
+        let dest = dir.join(format!("{key}.bin"));
+        let result = (|| -> Result<Value, String> {
+            let sha = entry["sha256"].as_str().ok_or("Missing SHA-256")?;
+            let expected_size = entry["size_bytes"].as_u64().ok_or("Missing size")?;
+            let urls: Vec<String> = if key == "voice" {
+                vec![entry["pack_url"]
+                    .as_str()
+                    .ok_or("Missing pack_url")?
+                    .to_owned()]
+            } else {
+                catalog::download_urls(entry, vec![])
+            };
+            if !urls.first().is_some_and(|u| u.starts_with(MODELSCOPE)) {
+                return Err(format!("ModelScope is not first: {urls:?}"));
+            }
+            let before = shell_log()?.len();
+            let last = Mutex::new(Instant::now());
+            let progress: ProgressFn = Arc::new(move |done, total, phase| {
+                let mut at = last.lock().unwrap();
+                if at.elapsed() >= Duration::from_secs(5) || phase == "verify" {
+                    println!("PROGRESS {key} {done}/{total} phase={phase}");
+                    *at = Instant::now();
+                }
+            });
+            download::download_request(
+                DownloadRequest {
+                    urls: urls.clone(),
+                    root: None,
+                    dest: dest.clone(),
+                    expected_sha256: sha.to_owned(),
+                    size_hint: expected_size,
+                    connections: None,
+                    kind,
+                },
+                Arc::new(AtomicBool::new(false)),
+                Some(progress),
+            )?;
+            let log = shell_log()?;
+            let marker = format!("download {} ok ", kind.as_str());
+            let source = log[before..]
+                .lines()
+                .filter_map(|line| line.split_once(&marker).map(|(_, url)| url.to_owned()))
+                .last()
+                .ok_or("Missing successful download source log")?;
+            let bytes = dest.metadata().map_err(|e| e.to_string())?.len();
+            let actual_sha = download::file_sha256(&dest)?;
+            let evidence = json!({"name":entry["name"],"id":entry["id"],
+                "urls":urls,"actual_url":source,"bytes":bytes,"expected_bytes":expected_size,
+                "sha256":actual_sha,"expected_sha256":sha,"kind":kind.as_str()});
+            if bytes != expected_size || actual_sha != sha || source != urls[0] {
+                return Err(format!("Download verification mismatch: {evidence}"));
+            }
+            Ok(evidence)
+        })();
+        record(&mut rows, key, result);
+        for path in [
+            dest.clone(),
+            suffix(&dest, ".part"),
+            suffix(&dest, ".part.src"),
+        ] {
+            if path.is_file() {
+                fs::remove_file(path).unwrap();
+            }
+        }
+    }
+    fs::write(
+        dir.join("results.json"),
+        serde_json::to_vec_pretty(&rows).unwrap(),
+    )
+    .unwrap();
+    println!("EVIDENCE {}", dir.display());
+    assert!(
+        rows.iter().all(|row| row["pass"] == true),
+        "Acceptance failures: {rows:?}"
+    );
+}

@@ -735,8 +735,8 @@ pub fn download_request(
 
     let rt = shared_runtime();
 
-    // Runtime mirrors follow catalog priority, including resumed downloads.
-    let ordered = matches!(req.kind, DownloadKind::Runtime);
+    // Runtime and dependency mirrors follow catalog priority, including resumed downloads.
+    let ordered = matches!(req.kind, DownloadKind::Runtime | DownloadKind::Dependency);
     let urls = if ordered { req.urls.clone() } else { probe_order(&req.urls, &cancel) };
 
     let mut last_err = String::new();
@@ -1127,6 +1127,26 @@ mod tests {
         ]);
         let req = mirror_request(&base, &["/timeout", "/next"], "mirror-timeout");
         let dest = req.dest.clone();
+        let result = download_request(req, Arc::new(AtomicBool::new(false)), None);
+        server.join().unwrap();
+        result.unwrap();
+        assert_eq!(std::fs::read(&dest).unwrap(), b"hello fabric");
+        std::fs::remove_dir_all(dest.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn dependencies_keep_catalog_order_and_verify_hashes_with_a_resumed_fallback() {
+        let (base, server) = mirror_fixture(vec![
+            ("/first", "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".into(), Duration::ZERO),
+            ("/bad-hash", "HTTP/1.1 200 OK\r\nContent-Length: 12\r\nConnection: close\r\n\r\nwrong fabric".into(), Duration::ZERO),
+            ("/fallback", "HTTP/1.1 200 OK\r\nContent-Length: 12\r\nConnection: close\r\n\r\nhello fabric".into(), Duration::ZERO),
+        ]);
+        let mut req = mirror_request(&base, &["/first", "/bad-hash", "/fallback"], "dependency-priority");
+        req.kind = DownloadKind::Dependency;
+        let dest = req.dest.clone();
+        std::fs::create_dir_all(dest.parent().unwrap()).unwrap();
+        std::fs::write(suffixed(&dest, ".part"), b"hello").unwrap();
+        std::fs::write(suffixed(&dest, ".part.src"), &req.urls[2]).unwrap();
         let result = download_request(req, Arc::new(AtomicBool::new(false)), None);
         server.join().unwrap();
         result.unwrap();

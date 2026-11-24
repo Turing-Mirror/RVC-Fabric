@@ -227,6 +227,55 @@ pub(crate) fn download_urls(blob: &Value, fallback: Vec<String>) -> Vec<String> 
     urls
 }
 
+/// Resolve a file by content hash, regardless of its section in index.json.
+/// Catalog order wins; legacy addresses remain available when the catalog is absent.
+pub(crate) fn file_download_urls(
+    data: Option<&Value>,
+    sha256: &str,
+    fallback: Vec<String>,
+) -> Vec<String> {
+    fn collect(value: &Value, sha256: &str, urls: &mut Vec<String>) {
+        match value {
+            Value::Object(fields) => {
+                if fields
+                    .get("sha256")
+                    .and_then(Value::as_str)
+                    .is_some_and(|sha| sha.trim().eq_ignore_ascii_case(sha256))
+                {
+                    urls.extend(download_urls(value, Vec::new()));
+                }
+                for child in fields.values() {
+                    collect(child, sha256, urls);
+                }
+            }
+            Value::Array(entries) => {
+                for entry in entries {
+                    collect(entry, sha256, urls);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let sha256 = sha256.trim();
+    let mut candidates = Vec::new();
+    if sha256.len() == 64 && sha256.bytes().all(|c| c.is_ascii_hexdigit()) {
+        if let Some(data) = data {
+            collect(data, sha256, &mut candidates);
+        }
+    }
+    candidates.extend(fallback);
+    let mut urls = Vec::new();
+    for candidate in candidates {
+        let url = candidate.trim();
+        // Same scheme rule as extra_assets: catalog files must use HTTPS.
+        if url.starts_with("https://") && !urls.iter().any(|item| item == url) {
+            urls.push(url.to_string());
+        }
+    }
+    urls
+}
+
 fn normalize_part(
     part: &Value,
     variant: &str,
@@ -438,6 +487,77 @@ fn _raw_main() -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn file_urls_preserve_catalog_order_and_append_unique_fallbacks() {
+        let sha = "a".repeat(64);
+        let mirror = "https://modelscope.cn/models/test/resolve/main/pack.zip";
+        let backup = "https://cdn.example/pack.zip";
+        let release = "https://cnb.cool/test/repo/-/releases/download/tag/pack.zip";
+        let lfs = format!("https://cnb.cool/test/repo/-/lfs/{sha}");
+        let data = serde_json::json!({"engine_core": {
+            "sha256": sha.to_uppercase(), "urls": [format!(" {mirror} "), backup, release, mirror]
+        }});
+        assert_eq!(
+            file_download_urls(Some(&data), &sha, vec![lfs.clone(), release.into(), lfs.clone()]),
+            vec![mirror.to_string(), backup.into(), release.into(), lfs]
+        );
+    }
+
+    #[test]
+    fn file_urls_match_hashes_in_direct_entries_and_nested_packages() {
+        let sha = "b".repeat(64);
+        let mirror = "https://modelscope.cn/models/test/resolve/main/pack.zip";
+        let entry = serde_json::json!({"sha256": sha, "urls": [mirror]});
+        for section in ["engine_core", "audio_tools", "vbcable", "vcredist", "setup"] {
+            let data = serde_json::json!({section: entry.clone()});
+            assert_eq!(file_download_urls(Some(&data), &sha, vec![]), vec![mirror]);
+        }
+        for packages in [
+            serde_json::json!({"setup": [entry.clone()]}),
+            serde_json::json!({"audio_tools": {"files": [entry.clone()]}}),
+            serde_json::json!([entry.clone()]),
+        ] {
+            let data = serde_json::json!({"packages": packages});
+            assert_eq!(file_download_urls(Some(&data), &sha, vec![]), vec![mirror]);
+        }
+        let legacy = serde_json::json!({"vcredist": {"sha256": sha, "url": mirror}});
+        assert_eq!(file_download_urls(Some(&legacy), &sha, vec![]), vec![mirror]);
+    }
+
+    #[test]
+    fn missing_or_unmatched_catalog_keeps_original_file_urls() {
+        let sha = "a".repeat(64);
+        let fallback = vec![lfs_url(&sha), release_url("setup", "pack.zip")];
+        let other = serde_json::json!({"setup": {
+            "name": "pack.zip", "sha256": "b".repeat(64),
+            "urls": ["https://example.invalid/different-content.zip"]
+        }});
+        for data in [None, Some(&Value::Null), Some(&other)] {
+            assert_eq!(file_download_urls(data, &sha, fallback.clone()), fallback);
+        }
+        let missing_urls = serde_json::json!({"engine_core": {"sha256": sha}});
+        assert_eq!(file_download_urls(Some(&missing_urls), &sha, fallback.clone()), fallback);
+        let invalid_hash = serde_json::json!({"setup": {
+            "sha256": "", "urls": ["https://example.invalid/no-hash.zip"]
+        }});
+        assert_eq!(file_download_urls(Some(&invalid_hash), "", fallback.clone()), fallback);
+    }
+
+    #[test]
+    fn file_urls_accept_only_https_and_deduplicate_after_trimming() {
+        let sha = "c".repeat(64);
+        let mirror = "https://example.com/pack.zip";
+        let fallback = release_url("setup", "pack.zip");
+        let data = serde_json::json!({"setup": {
+            "sha256": sha,
+            "urls": ["http://example.com/pack.zip", "file:///pack.zip", "", 42, mirror, format!(" {mirror} ")]
+        }});
+        assert_eq!(
+            file_download_urls(Some(&data), &sha, vec!["http://example.com/old.zip".into(), fallback.clone()]),
+            vec![mirror.to_string(), fallback]
+        );
+    }
 
     #[test]
     fn runtime_mirrors_keep_catalog_order_for_both_channels() {

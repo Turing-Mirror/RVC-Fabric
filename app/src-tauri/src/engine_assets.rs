@@ -10,8 +10,8 @@
 //! * **VB-Cable** — the virtual cable. Without it nothing the user says reaches
 //!   the game, which is the whole point of the product.
 //!
-//! Specs mirror `launcher/cnb_sources.py` fallbacks; CNB LFS objects are
-//! sha256-addressed so the URL doubles as the integrity check.
+//! File URLs come from the catalog by SHA-256. Built-in CNB addresses remain
+//! fallbacks; every archive is verified against its expected content hash.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
@@ -205,7 +205,7 @@ fn has_driver_files(dir: &Path) -> bool {
 // Shared download + extract
 // ---------------------------------------------------------------------------
 
-/// engine-core / VB-Cable 的下载地址。
+/// engine-core / VB-Cable 的旧 CNB 备用地址。
 ///
 /// 以前只有官方仓库一条 —— CNB 一挂，谁都装不上，而这是首次运行的必经之路。
 /// 现在基址列表从清单来（`mirrors::lfs_bases`），官方仓库永远排第一，要加备份
@@ -239,7 +239,12 @@ pub fn release_urls(root: &Path, tag: &str, file: &str) -> Vec<String> {
         .collect()
 }
 
-/// 同 `fetch_pack`，但在按 sha 寻址之后再挂几条备用地址。
+fn catalog_urls_for_pack(sha: &str, fallback: Vec<String>) -> Vec<String> {
+    let data = crate::catalog::fetch_remote_catalog_cached(12).ok();
+    crate::catalog::file_download_urls(data.as_ref(), sha, fallback)
+}
+
+/// Prefer catalog file URLs, then retain SHA-addressed and caller-supplied fallbacks.
 pub fn fetch_pack_with_fallback(
     cache_name: &str,
     sha: &str,
@@ -256,6 +261,7 @@ pub fn fetch_pack_with_fallback(
     if !cached_ok {
         let mut urls = lfs_urls(root, sha);
         urls.extend(extra);
+        let urls = catalog_urls_for_pack(sha, urls);
         download::download_request(
             download::DownloadRequest {
                 urls,
@@ -308,6 +314,7 @@ fn fetch_and_extract(
         if let Some((tag, file)) = release_ref(cache_name) {
             urls.extend(release_urls(root, tag, file));
         }
+        let urls = catalog_urls_for_pack(sha, urls);
         download::download_request(
             download::DownloadRequest {
                 urls,
@@ -674,5 +681,36 @@ mod tests {
         assert!(u[0].starts_with(CNB_REPO), "官方仓库必须还是第一个");
         assert!(u[1].starts_with("https://backup.example.cn/"));
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    #[ignore = "Read-only live catalog check; ModelScope publication is controlled separately"]
+    fn live_dependency_catalog_urls() {
+        let data = crate::catalog::fetch_remote_catalog_cached(20).expect("Read live index.json");
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let mut failures = Vec::new();
+        println!("CATALOG_CHECK_AT {}", chrono::Utc::now().to_rfc3339());
+        for (key, name, sha) in [
+            ("engine_core", ENGINE_CORE_NAME, ENGINE_CORE_SHA),
+            ("vbcable", VBCABLE_NAME, VBCABLE_SHA),
+        ] {
+            let (tag, file) = release_ref(name).unwrap();
+            let mut fallback = lfs_urls(&root, sha);
+            fallback.extend(release_urls(&root, tag, file));
+            let urls = catalog_urls_for_pack(sha, fallback);
+            let raw_first = data[key]["urls"][0].as_str().unwrap_or_default();
+            let first = urls.first().map(String::as_str).unwrap_or_default();
+            let pass = first == raw_first.trim()
+                && first.starts_with("https://modelscope.cn/models/Kara251/kara-rvc-model/");
+            println!(
+                "CATALOG_URL_RESULT {}",
+                json!({"key":key,"sha256":sha,"catalog_sha256":data[key]["sha256"],
+                    "catalog_first":raw_first,"urls":urls,"pass":pass})
+            );
+            if !pass {
+                failures.push(key);
+            }
+        }
+        assert!(failures.is_empty(), "ModelScope is not first for: {failures:?}");
     }
 }

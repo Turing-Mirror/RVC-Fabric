@@ -143,13 +143,12 @@ class ModelScopeRuntimeTests(unittest.TestCase):
                 (current / ".git").rmdir()
                 self.assertEqual(bc.default_cnb_dir(), legacy)
 
-    def test_mapping_changes_only_runtime_parts_and_preserves_checksums(self):
+    def test_mapping_puts_mirrors_first_and_preserves_checksums(self):
         with tempfile.TemporaryDirectory() as td:
             paths = make_fixture(Path(td))
             rep = bc.Report()
             src = bc.load_sources(paths, rep)
             before = bc.compile_catalog(src, paths, rep)
-            # Include unrelated artifacts in the mapping: they must stay unchanged.
             mirrors = {}
             for section in ("engine_core", "vbcable"):
                 sha = before["index"][section]["sha256"]
@@ -170,8 +169,28 @@ class ModelScopeRuntimeTests(unittest.TestCase):
                     self.assertEqual(new["sha256"], old["sha256"])
                     self.assertEqual(new["size_bytes"], old["size_bytes"])
                 self.assertEqual(after[output]["runtimes"]["nvidia50"], before[output]["runtimes"]["nvidia50"])
-            for section in ("engine_core", "vbcable", "app", "voices", "extras"):
+            for section in ("engine_core", "vbcable"):
+                old, new = before["index"][section], after["index"][section]
+                self.assertEqual(new["urls"], [mirrors[old["sha256"]], *old["urls"]])
+                self.assertEqual(new["sha256"], old["sha256"])
+            # Files without a mirror keep their URLs.
+            for section in ("app", "voices", "extras"):
                 self.assertEqual(after["index"][section], before["index"][section])
+
+    def test_extras_put_mirrors_first(self):
+        mirror = "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/commit/a.pth"
+        rep = bc.Report()
+        out = bc._compile_extras([{
+            "key": "pretrained", "dest": "assets/pretrained", "release_tag": "pretrained",
+            "files": [
+                {"name": "a.pth", "sha256": "a" * 64, "size_bytes": 1},
+                {"name": "b.pth", "sha256": "b" * 64, "size_bytes": 1},
+            ],
+        }], rep, {"a" * 64: mirror})
+        self.assertEqual(rep.errors, [])
+        a, b = out["pretrained"]["files"]
+        self.assertEqual(a["urls"], [mirror, bc.cnb_release_url("pretrained", "a.pth")])
+        self.assertEqual(b["urls"], [bc.cnb_release_url("pretrained", "b.pth")])
 
     def test_every_part_is_mapped_without_duplicate_urls(self):
         with tempfile.TemporaryDirectory() as td:

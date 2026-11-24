@@ -351,6 +351,21 @@ def cnb_release_url(tag: str, name: str) -> str:
     return f"{CNB_REPO_URL}/-/releases/download/{tag}/{name}"
 
 
+def load_mirrors(paths: "Paths") -> dict:
+    """sha256 → ModelScope URL, read from catalog/modelscope.json in the release repo."""
+    f = paths.cnb / "catalog" / "modelscope.json"
+    if not f.is_file():
+        return {}
+    files = json.loads(f.read_text(encoding="utf-8")).get("files") or {}
+    return {str(k).lower(): str(v) for k, v in files.items()}
+
+
+def mirror_first(mirrors: dict, sha: str, urls: list) -> list:
+    """Put the ModelScope copy of a file ahead of its other download URLs."""
+    mirror = mirrors.get(str(sha).lower())
+    return [mirror, *(u for u in urls if u != mirror)] if mirror else list(urls)
+
+
 def cnb_cover_url(rel_path: str) -> str:
     """封面走 Release 附件，不走 git raw。
 
@@ -542,7 +557,7 @@ def _resolve_artifact(
         "name": name,
         "sha256": sha,
         "size_bytes": int(size) if size is not None else 0,
-        "urls": urls,
+        "urls": mirror_first(load_mirrors(paths), sha, urls),
         "sha256_urls": sha_urls,
         "file": rel_file,
     }
@@ -949,8 +964,6 @@ def _compile_runtime(
         rep.error(f"{who}: 缺 parts")
         return None
     parts = []
-    mirror_path = paths.cnb / "catalog" / "modelscope.json"
-    mirrors = json.loads(mirror_path.read_text(encoding="utf-8"))["files"] if mirror_path.is_file() else {}
     for i, p in enumerate(parts_src):
         art = _resolve_artifact(
             dict(p),
@@ -960,8 +973,6 @@ def _compile_runtime(
             channel=channel,
             release_tag=release_tag,
         )
-        if mirror := mirrors.get(art["sha256"].lower()):
-            art["urls"] = [mirror, *(u for u in art["urls"] if u != mirror)]
         parts.append(
             {
                 "name": art["name"],
@@ -1120,7 +1131,7 @@ def _valid_lfs_base(u: str) -> bool:
 
 
 
-def _compile_extras(entries: list, rep: Report) -> dict:
+def _compile_extras(entries: list, rep: Report, mirrors: dict) -> dict:
     """附加资源 → index.extras。
 
     和 runtime 不同，这里**不查本地文件**：这些权重不进发布仓的 git，只在
@@ -1172,7 +1183,9 @@ def _compile_extras(entries: list, rep: Report) -> dict:
             # Release 附件按平铺 base name 寻址（上传时就是按 base name 传的）；
             # 清单里的嵌套相对路径只决定客户端本地摆哪，与客户端同规则。
             base = name.rsplit("/", 1)[-1]
-            urls = [cnb_lfs_url(sha)] if channel == "lfs" else [cnb_release_url(tag, base)]
+            urls = mirror_first(
+                mirrors, sha, [cnb_lfs_url(sha)] if channel == "lfs" else [cnb_release_url(tag, base)]
+            )
             row = {
                 "name": name,
                 "sha256": sha,
@@ -1366,7 +1379,7 @@ def compile_catalog(src: dict, paths: Paths, rep: Report) -> Optional[dict]:
     }
     _validate_shell_versions(app, rep)
 
-    extras = _compile_extras(src.get("extras") or [], rep)
+    extras = _compile_extras(src.get("extras") or [], rep, load_mirrors(paths))
 
     engine_core = _compile_blob(
         src.get("engine_core") or {}, paths, rep, who="engine-core", extract_root="."

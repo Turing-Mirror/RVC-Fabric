@@ -29,6 +29,7 @@
     "size_bytes": 753796337,
     "sha256": "ecb3231c7d26ad553e902ac24d40daf3d3fbe5786a7d8e78af8038fc389cab47",
     "urls": [
+      "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/engine-core/engine-core-260722.zip",
       "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/engine-core/engine-core-260722.zip"
     ],
     "sha256_urls": [
@@ -44,9 +45,10 @@
     "size_bytes": 1299644,
     "sha256": "0518435a76264856e4e2733ac22143ff16595c763cbf58106ed04d6895c6ddf5",
     "urls": [
+      "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/vbcable/vbcable-setup.zip",
       "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/vbcable/vbcable-setup.zip"
     ],
-    "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/vbcable/vbcable-setup.zip",
+    "url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/vbcable/vbcable-setup.zip",
     "sha256_urls": [
       "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/git/raw/main/vbcable/vbcable-setup.zip.sha256"
     ],
@@ -142,7 +144,7 @@
       "package_type": "voice_pack",
       "cover": "ch-banner/guanguan.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/guanguan.jpg",
-      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/guanguan-v2.zip",
+      "pack_url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/bd6eb6155af4eabbe100e3fbd4ace25c9d936b81/reposts/guanguan-v2.zip",
       "sha256": "dfb9a54afe78a95b32f1742090bd55541c28a205f3f958884247e4a454e2aeb3",
       "size_bytes": 51006395,
       "description": "guanguanV1 · 来源于官方下载",
@@ -199,7 +201,7 @@
       "package_type": "voice_pack",
       "cover": "ch-banner/keruan.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/keruan.jpg",
-      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/keruan-v2.zip",
+      "pack_url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/bd6eb6155af4eabbe100e3fbd4ace25c9d936b81/reposts/keruan-v2.zip",
       "sha256": "c7cf492fcf0f39d62dbbab6fae6524a68368e8df7568e289cf6336d717432cc6",
       "size_bytes": 51012498,
       "description": "keruanV1 · 来源于官方下载",
@@ -256,7 +258,7 @@
       "package_type": "voice_pack",
       "cover": "ch-banner/kiki.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/kiki.jpg",
-      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/kiki-v2.zip",
+      "pack_url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/bd6eb6155af4eabbe100e3fbd4ace25c9d936b81/reposts/kiki-v2.zip",
       "sha256": "1b6e11604e16dba50398b514dae8729d274d430edac2f08874d587c5bb6bd926",
       "size_bytes": 51021019,
       "description": "kikiV1 · 来源于官方下载",
@@ -313,7 +315,7 @@
       "package_type": "voice_pack",
       "cover": "ch-banner/youzhanv2-xi.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/youzhanv2-xi.jpg",
-      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/youzhanv2-xi-v2.zip",
+      "pack_url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/bd6eb6155af4eabbe100e3fbd4ace25c9d936b81/reposts/youzhanv2-xi-v2.zip",
       "sha256": "6ff5a598f728c116c8c4001b81ed32cc81f46754f6833970920aea0f445b91e1",
       "size_bytes": 53357394,
       "description": "youzhanv2-xi · 来源于官方下载",
@@ -370,7 +372,7 @@
       "package_type": "voice_pack",
       "cover": "ch-banner/Anon.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/Anon.jpg",
-      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/Anon-v1.zip",
+      "pack_url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/bd6eb6155af4eabbe100e3fbd4ace25c9d936b81/reposts/Anon-v1.zip",
       "sha256": "35916208f204b4c48f5e3e27df11976d2b9175bec93afe90ae5ce2b4ec649458",
       "size_bytes": 82531532,
       "description": "Anon · MyGO!!!!! · 来源于官方下载",
@@ -428,7 +430,7 @@
       "package_type": "voice_pack",
       "cover": "ch-banner/Rana.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/Rana.jpg",
-      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/Rana-v1.zip",
+      "pack_url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/bd6eb6155af4eabbe100e3fbd4ace25c9d936b81/reposts/Rana-v1.zip",
       "sha256": "6891050421a66bb526b5fceae6dec2521191b37cfb4b0d358a80a315c52b88c1",
       "size_bytes": 129503551,
       "description": "Rana · MyGO!!!!! · 来源于官方下载",
@@ -486,7 +488,7 @@
       "package_type": "voice_pack",
       "cover": "ch-banner/Soyo.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/Soyo.jpg",
-      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/Soyo-v1.zip",
+      "pack_url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/bd6eb6155af4eabbe100e3fbd4ace25c9d936b81/reposts/Soyo-v1.zip",
       "sha256": "8c8e78f7ee4255bffa9b8b00e651fb42bc143cf2460e5b12a787f723eae9e2fd",
       "size_bytes": 207948470,
       "description": "Soyo · MyGO!!!!! · 来源于官方下载",
@@ -544,7 +546,7 @@
       "package_type": "voice_pack",
       "cover": "ch-banner/Taki.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/Taki.jpg",
-      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/Taki-v1.zip",
+      "pack_url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/bd6eb6155af4eabbe100e3fbd4ace25c9d936b81/reposts/Taki-v1.zip",
       "sha256": "9c53e8964737d534e558bf7339d393ccd9f82b35ec5d0d37c6d74b6e1374d96b",
       "size_bytes": 333192756,
       "description": "Taki · MyGO!!!!! · 来源于官方下载",
@@ -602,7 +604,7 @@
       "package_type": "voice_pack",
       "cover": "ch-banner/Tomori.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/Tomori.jpg",
-      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/Tomori-v1.zip",
+      "pack_url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/bd6eb6155af4eabbe100e3fbd4ace25c9d936b81/reposts/Tomori-v1.zip",
       "sha256": "c64a9446328ed8c2d57056d07d6b6ac909e04c9717efcfb02280cbcd90969112",
       "size_bytes": 430166654,
       "description": "Tomori · MyGO!!!!! · 来源于官方下载",
@@ -660,7 +662,7 @@
       "package_type": "voice_pack",
       "cover": "ch-banner/Kei.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/Kei.jpg",
-      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/Kei-v2.zip",
+      "pack_url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/voices/Kei-v2.zip",
       "sha256": "01c2cd9261b0f87f19e709891bce04775f7e83ad5ee7c17f5769739a1ff1cc4c",
       "size_bytes": 113461951,
       "description": "凯伊 · 蔚蓝档案 · Kara251 260816 版",
@@ -705,7 +707,7 @@
       "package_type": "voice_pack",
       "cover": "ch-banner/Hoshino-JP.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/Hoshino-JP.jpg",
-      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/Hoshino-JP-v2.zip",
+      "pack_url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/voices/Hoshino-JP-v2.zip",
       "sha256": "0e8172244eed30ed060572ba4205e0617e05dcd88d0fb9a9d2b36d656f2a49a0",
       "size_bytes": 208437667,
       "description": "小鸟游星野（日配） · 蔚蓝档案 · Kara251 260821 版",
@@ -750,7 +752,7 @@
       "package_type": "voice_pack",
       "cover": "ch-banner/Hoshino-ZH.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/Hoshino-ZH.jpg",
-      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/Hoshino-ZH-v2.zip",
+      "pack_url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/voices/Hoshino-ZH-v2.zip",
       "sha256": "6cc61b889ef16fcaf32a31a208257471be3eac1a34fd7162769717a40ca11c88",
       "size_bytes": 178234504,
       "description": "小鸟游星野（中配） · 蔚蓝档案 · Kara251 260821 版",
@@ -795,7 +797,7 @@
       "package_type": "voice_pack",
       "cover": "ch-banner/Serika-JP.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/Serika-JP.jpg",
-      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/Serika-JP-v2.zip",
+      "pack_url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/voices/Serika-JP-v2.zip",
       "sha256": "225804a92cfda8f41d7a6b946445ed5199a56b7ed660cbe76e08c22a0e67759b",
       "size_bytes": 217069942,
       "description": "黑见芹香（日配） · 蔚蓝档案 · Kara251 260824 版",
@@ -840,7 +842,7 @@
       "package_type": "voice_pack",
       "cover": "ch-banner/Serika-ZH.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/Serika-ZH.jpg",
-      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/Serika-ZH-v2.zip",
+      "pack_url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/voices/Serika-ZH-v2.zip",
       "sha256": "18ad5b81b341f9526bae1e26b871d4373ecaf10e7b588fc5154054273ef1f3c9",
       "size_bytes": 155249760,
       "description": "黑见芹香（中配） · 蔚蓝档案 · Kara251 260824 版",
@@ -885,7 +887,7 @@
       "package_type": "voice_pack",
       "cover": "ch-banner/Alice-JP.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/Alice-JP.jpg",
-      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/Alice-JP-v2.zip",
+      "pack_url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/voices/Alice-JP-v2.zip",
       "sha256": "cce46b79c3d6b7b28dab16801f46c80321b60e9ee5b3f775885ead1665467b8e",
       "size_bytes": 184688294,
       "description": "天童爱丽丝（日配） · 蔚蓝档案 · Kara251 260827 版",
@@ -930,7 +932,7 @@
       "package_type": "voice_pack",
       "cover": "ch-banner/Alice-ZH.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/Alice-ZH.jpg",
-      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/Alice-ZH-v2.zip",
+      "pack_url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/voices/Alice-ZH-v2.zip",
       "sha256": "059b0f7d64b72829f6ab22add3488fca772506a3808460c7b1db9c3d6f667a5b",
       "size_bytes": 120882353,
       "description": "天童爱丽丝（中配） · 蔚蓝档案 · Kara251 260827 版",
@@ -975,7 +977,7 @@
       "package_type": "voice_pack",
       "cover": "ch-banner/tp-hina-ba.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/tp-hina-ba.jpg",
-      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/Hina-JP-v2.zip",
+      "pack_url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/voices/Hina-JP-v2.zip",
       "sha256": "68bb029a2b9db350a5d4fa3f7aa7d2c2fa5215bdef52bab862f49a1649853364",
       "size_bytes": 167687918,
       "description": "空崎日奈（日配） · 蔚蓝档案 · Kara251 260910 版",
@@ -1033,7 +1035,7 @@
       "package_type": "voice_pack",
       "cover": "ch-banner/tp-hina-ba.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/tp-hina-ba.jpg",
-      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/Hina-ZH-v2.zip",
+      "pack_url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/voices/Hina-ZH-v2.zip",
       "sha256": "8fafbd6bbeed83fde352db38da7fede61ebcc5c24e7b685848dcca1365a99066",
       "size_bytes": 168995388,
       "description": "空崎日奈（中配） · 蔚蓝档案 · Kara251 260910 版",
@@ -1091,7 +1093,7 @@
       "package_type": "voice_pack",
       "cover": "ch-banner/tp-mari.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/tp-mari.jpg",
-      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/Mari-JP-v2.zip",
+      "pack_url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/voices/Mari-JP-v2.zip",
       "sha256": "6060cf7462926d802fd95de3137d48e755aa8dc9a568f5db51875d4699391060",
       "size_bytes": 144363283,
       "description": "伊落玛丽（日配） · 蔚蓝档案 · Kara251 260910 版",
@@ -1149,7 +1151,7 @@
       "package_type": "voice_pack",
       "cover": "ch-banner/tp-mari.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/tp-mari.jpg",
-      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/Mari-ZH-v2.zip",
+      "pack_url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/voices/Mari-ZH-v2.zip",
       "sha256": "95c8ab87e3999aaaec7c8740896e910760f76b0dcc9bc9051c92c1825ea38a4e",
       "size_bytes": 140199848,
       "description": "伊落玛丽（中配） · 蔚蓝档案 · Kara251 260910 版",
@@ -1207,7 +1209,7 @@
       "package_type": "voice_pack",
       "cover": "ch-banner/tp-toki.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/tp-toki.jpg",
-      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/Toki-JP-v2.zip",
+      "pack_url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/voices/Toki-JP-v2.zip",
       "sha256": "c2560b3699195be95c38ed84f709b30655ab27cf3f8b942579ccffb09cab79c4",
       "size_bytes": 199984662,
       "description": "飞鸟马时（日配） · 蔚蓝档案 · Kara251 260910 版",
@@ -1265,7 +1267,7 @@
       "package_type": "voice_pack",
       "cover": "ch-banner/tp-toki.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/tp-toki.jpg",
-      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/Toki-ZH-v2.zip",
+      "pack_url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/voices/Toki-ZH-v2.zip",
       "sha256": "59d94b9934b1a7cbf6cc6c036ab6eb24e5be8515f9c35a2dd44fbcfb34c095d5",
       "size_bytes": 133282614,
       "description": "飞鸟马时（中配） · 蔚蓝档案 · Kara251 260910 版",
@@ -1323,7 +1325,7 @@
       "package_type": "voice_pack",
       "cover": "ch-banner/tp-yuuka.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/tp-yuuka.jpg",
-      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/Yuuka-JP-v2.zip",
+      "pack_url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/voices/Yuuka-JP-v2.zip",
       "sha256": "45e159f546b549cf932e3a5efad03af29dc6cc4bd4117d442485c0f23e8696c9",
       "size_bytes": 242136000,
       "description": "早濑优香（日配） · 蔚蓝档案 · Kara251 260910 版",
@@ -1381,7 +1383,7 @@
       "package_type": "voice_pack",
       "cover": "ch-banner/tp-yuuka.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/tp-yuuka.jpg",
-      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/Yuuka-ZH-v2.zip",
+      "pack_url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/voices/Yuuka-ZH-v2.zip",
       "sha256": "e1ee94859ad358dae5d99f2da58ab34dde75f0d469a0625ffc546dd92c130eb2",
       "size_bytes": 169957208,
       "description": "早濑优香（中配） · 蔚蓝档案 · Kara251 260910 版",
@@ -1439,7 +1441,7 @@
       "package_type": "voice_pack",
       "cover": "ch-banner/tp-danganronpa-nanami.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/tp-danganronpa-nanami.jpg",
-      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/Nanami-JP-v1.zip",
+      "pack_url": "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/bd6eb6155af4eabbe100e3fbd4ace25c9d936b81/reposts/Nanami-JP-v1.zip",
       "sha256": "78bf957939774dcc304260efa527bc3811a046cf45b8276966c27ce395590733",
       "size_bytes": 332274747,
       "description": "七海千秋（日语） · 弹丸论破 · 蔚汀Wittin · 图灵镜整理发布 260912 版",
@@ -16264,6 +16266,7 @@
           "size_bytes": 73811639,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pretrained-v2-32k/G32k.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pretrained-v2/G32k.pth"
           ],
           "release_tag": "pretrained-v2"
@@ -16274,6 +16277,7 @@
           "size_bytes": 142875703,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pretrained-v2-32k/D32k.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pretrained-v2/D32k.pth"
           ],
           "release_tag": "pretrained-v2"
@@ -16284,6 +16288,7 @@
           "size_bytes": 73950049,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pretrained-v2-32k/f0G32k.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pretrained-v2/f0G32k.pth"
           ],
           "release_tag": "pretrained-v2"
@@ -16294,6 +16299,7 @@
           "size_bytes": 142875703,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pretrained-v2-32k/f0D32k.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pretrained-v2/f0D32k.pth"
           ],
           "release_tag": "pretrained-v2"
@@ -16317,6 +16323,7 @@
           "size_bytes": 72959671,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pretrained-v2-40k/G40k.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pretrained-v2/G40k.pth"
           ],
           "release_tag": "pretrained-v2"
@@ -16327,6 +16334,7 @@
           "size_bytes": 142875703,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pretrained-v2-40k/D40k.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pretrained-v2/D40k.pth"
           ],
           "release_tag": "pretrained-v2"
@@ -16337,6 +16345,7 @@
           "size_bytes": 73106273,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pretrained-v2-40k/f0G40k.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pretrained-v2/f0G40k.pth"
           ],
           "release_tag": "pretrained-v2"
@@ -16347,6 +16356,7 @@
           "size_bytes": 142875703,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pretrained-v2-40k/f0D40k.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pretrained-v2/f0D40k.pth"
           ],
           "release_tag": "pretrained-v2"
@@ -16370,6 +16380,7 @@
           "size_bytes": 75318967,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pretrained-v2-48k/G48k.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pretrained-v2/G48k.pth"
           ],
           "release_tag": "pretrained-v2"
@@ -16380,6 +16391,7 @@
           "size_bytes": 142875703,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pretrained-v2-48k/D48k.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pretrained-v2/D48k.pth"
           ],
           "release_tag": "pretrained-v2"
@@ -16390,6 +16402,7 @@
           "size_bytes": 75465569,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pretrained-v2-48k/f0G48k.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pretrained-v2/f0G48k.pth"
           ],
           "release_tag": "pretrained-v2"
@@ -16400,6 +16413,7 @@
           "size_bytes": 142875703,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pretrained-v2-48k/f0D48k.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pretrained-v2/f0D48k.pth"
           ],
           "release_tag": "pretrained-v2"
@@ -16423,6 +16437,7 @@
           "size_bytes": 223650277,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-bve/UVR-BVE-4B_SN-44100-1.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/UVR-BVE-4B_SN-44100-1.pth"
           ],
           "release_tag": "pymss"
@@ -16446,6 +16461,7 @@
           "size_bytes": 127139365,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-deecho/UVR-De-Echo-Normal.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/UVR-De-Echo-Normal.pth"
           ],
           "release_tag": "pymss"
@@ -16456,6 +16472,7 @@
           "size_bytes": 127139365,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-deecho/UVR-De-Echo-Aggressive.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/UVR-De-Echo-Aggressive.pth"
           ],
           "release_tag": "pymss"
@@ -16466,6 +16483,7 @@
           "size_bytes": 223650277,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-deecho/UVR-DeEcho-DeReverb.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/UVR-DeEcho-DeReverb.pth"
           ],
           "release_tag": "pymss"
@@ -16489,6 +16507,7 @@
           "size_bytes": 127139365,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-denoise/UVR-DeNoise.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/UVR-DeNoise.pth"
           ],
           "release_tag": "pymss"
@@ -16499,6 +16518,7 @@
           "size_bytes": 17922277,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-denoise/UVR-DeNoise-Lite.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/UVR-DeNoise-Lite.pth"
           ],
           "release_tag": "pymss"
@@ -16522,6 +16542,7 @@
           "size_bytes": 58928133,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-dereverb/UVR-DeReverb-aufr33-jarredou_4band_v4_ms_fullband.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/UVR-DeReverb-aufr33-jarredou_4band_v4_ms_fullband.pth"
           ],
           "release_tag": "pymss"
@@ -16545,6 +16566,7 @@
           "size_bytes": 59320122,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-harmonic/Harmonic_Noise_Separation_yxlllc.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/Harmonic_Noise_Separation_yxlllc.pth"
           ],
           "release_tag": "pymss"
@@ -16568,6 +16590,7 @@
           "size_bytes": 550120123,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-hp2/7_HP2-UVR.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/7_HP2-UVR.pth"
           ],
           "release_tag": "pymss"
@@ -16578,6 +16601,7 @@
           "size_bytes": 550131079,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-hp2/8_HP2-UVR.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/8_HP2-UVR.pth"
           ],
           "release_tag": "pymss"
@@ -16588,6 +16612,7 @@
           "size_bytes": 550131079,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-hp2/9_HP2-UVR.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/9_HP2-UVR.pth"
           ],
           "release_tag": "pymss"
@@ -16611,6 +16636,7 @@
           "size_bytes": 126792647,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-inst/1_HP-UVR.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/1_HP-UVR.pth"
           ],
           "release_tag": "pymss"
@@ -16621,6 +16647,7 @@
           "size_bytes": 126782699,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-inst/2_HP-UVR.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/2_HP-UVR.pth"
           ],
           "release_tag": "pymss"
@@ -16644,6 +16671,7 @@
           "size_bytes": 126782699,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-karaoke/5_HP-Karaoke-UVR.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/5_HP-Karaoke-UVR.pth"
           ],
           "release_tag": "pymss"
@@ -16654,6 +16682,7 @@
           "size_bytes": 126782699,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-karaoke/6_HP-Karaoke-UVR.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/6_HP-Karaoke-UVR.pth"
           ],
           "release_tag": "pymss"
@@ -16677,6 +16706,7 @@
           "size_bytes": 31938951,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-mgm/MGM_MAIN_v4.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/MGM_MAIN_v4.pth"
           ],
           "release_tag": "pymss"
@@ -16687,6 +16717,7 @@
           "size_bytes": 31861529,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-mgm/MGM_HIGHEND_v4.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/MGM_HIGHEND_v4.pth"
           ],
           "release_tag": "pymss"
@@ -16697,6 +16728,7 @@
           "size_bytes": 31938951,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-mgm/MGM_LOWEND_A_v4.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/MGM_LOWEND_A_v4.pth"
           ],
           "release_tag": "pymss"
@@ -16707,6 +16739,7 @@
           "size_bytes": 31938951,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-mgm/MGM_LOWEND_B_v4.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/MGM_LOWEND_B_v4.pth"
           ],
           "release_tag": "pymss"
@@ -16730,6 +16763,7 @@
           "size_bytes": 31938951,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-sp/10_SP-UVR-2B-32000-1.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/10_SP-UVR-2B-32000-1.pth"
           ],
           "release_tag": "pymss"
@@ -16740,6 +16774,7 @@
           "size_bytes": 31938951,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-sp/11_SP-UVR-2B-32000-2.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/11_SP-UVR-2B-32000-2.pth"
           ],
           "release_tag": "pymss"
@@ -16750,6 +16785,7 @@
           "size_bytes": 31938951,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-sp/12_SP-UVR-3B-44100.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/12_SP-UVR-3B-44100.pth"
           ],
           "release_tag": "pymss"
@@ -16760,6 +16796,7 @@
           "size_bytes": 31938951,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-sp/13_SP-UVR-4B-44100-1.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/13_SP-UVR-4B-44100-1.pth"
           ],
           "release_tag": "pymss"
@@ -16770,6 +16807,7 @@
           "size_bytes": 31938951,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-sp/14_SP-UVR-4B-44100-2.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/14_SP-UVR-4B-44100-2.pth"
           ],
           "release_tag": "pymss"
@@ -16780,6 +16818,7 @@
           "size_bytes": 31938951,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-sp/15_SP-UVR-MID-44100-1.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/15_SP-UVR-MID-44100-1.pth"
           ],
           "release_tag": "pymss"
@@ -16790,6 +16829,7 @@
           "size_bytes": 31938951,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-sp/16_SP-UVR-MID-44100-2.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/16_SP-UVR-MID-44100-2.pth"
           ],
           "release_tag": "pymss"
@@ -16813,6 +16853,7 @@
           "size_bytes": 126792647,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-vocal/3_HP-Vocal-UVR.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/3_HP-Vocal-UVR.pth"
           ],
           "release_tag": "pymss"
@@ -16823,6 +16864,7 @@
           "size_bytes": 126792647,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-vocal/4_HP-Vocal-UVR.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/4_HP-Vocal-UVR.pth"
           ],
           "release_tag": "pymss"
@@ -16846,6 +16888,7 @@
           "size_bytes": 223661285,
           "channel": "release",
           "urls": [
+            "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/ebdaa2fb6e4ea357e5bd27bee9078cf45b20887e/fabric/extras/pymss-wind/17_HP-Wind_Inst-UVR.pth",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/17_HP-Wind_Inst-UVR.pth"
           ],
           "release_tag": "pymss"

@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import time
 from urllib.error import HTTPError
 from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
@@ -122,3 +123,54 @@ class R2Publisher:
         # Both public downloads have passed before any old version is removed.
         for key in obsolete:
             self.wrangler("r2", "object", "delete", f"{self.bucket}/{key}", "--remote")
+
+
+MS_SITE = "https://modelscope.cn"
+
+
+class ModelScopeMirror:
+    """Backup copy of a signed installer in a ModelScope model repo.
+
+    The resolve URL pins the commit, so the address never changes once listed.
+    Uploads go through the `ms-hub` CLI and its saved login; set TRM_MS_HUB to
+    use another executable.
+    """
+
+    def __init__(self, repo: str, folder: str):
+        self.repo, self.folder = repo, folder.strip("/")
+
+    def listing(self) -> list[dict]:
+        query = urlencode({"Revision": "master", "Recursive": "true", "Root": self.folder})
+        request = Request(f"{MS_SITE}/api/v1/models/{self.repo}/repo/files?{query}",
+                          headers={"User-Agent": "Fabric-release"})
+        with urlopen(request, timeout=60) as response:
+            return json.load(response)["Data"]["Files"] or []
+
+    def find(self, name: str, sha256: str, size_bytes: int) -> str | None:
+        path = f"{self.folder}/{name}"
+        for item in self.listing():
+            if (item.get("Type") == "blob" and item.get("Path") == path and item.get("Revision")
+                    and (item.get("Sha256") or "").lower() == sha256.lower()
+                    and int(item.get("Size") or -1) == size_bytes):
+                return f"{MS_SITE}/models/{self.repo}/resolve/{item['Revision']}/{quote(path)}"
+        return None
+
+    def publish(self, installer: Path, version: str, sha256: str, size_bytes: int, *, attempts: int = 10) -> str:
+        url = self.find(installer.name, sha256, size_bytes)
+        if url:
+            return url
+        executable = os.environ.get("TRM_MS_HUB") or shutil.which("ms-hub")
+        if not executable:
+            raise RuntimeError("Install the ms-hub CLI or set TRM_MS_HUB.")
+        subprocess.run([executable, "upload", self.repo, str(installer), f"{self.folder}/{installer.name}",
+                        "--repo-type", "model", "--commit-message", f"Add {installer.name}",
+                        "--disable-tqdm"], check=True)
+        for attempt in range(attempts):
+            url = self.find(installer.name, sha256, size_bytes)
+            if url:
+                identity = download_identity(url)
+                if identity != (sha256, size_bytes):
+                    raise ValueError("The ModelScope installer has different bytes: " + url)
+                return url
+            time.sleep(min(30, 5 * (attempt + 1)))
+        raise RuntimeError(f"ModelScope does not list {self.folder}/{installer.name} after upload.")

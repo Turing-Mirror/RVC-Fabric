@@ -421,8 +421,33 @@ pub fn today_yymmdd() -> String {
     chrono::Local::now().format("%y%m%d").to_string()
 }
 
+/// Addresses of a release feed, the website first and the CNB release repo second.
+///
+/// The website's `app.json` is the `app` section of the repo's `index.json`, so
+/// the CNB copy of `app.json` is `index.json` itself.
+fn release_feed_urls(file: &str) -> [String; 2] {
+    let cnb_file = if file == "app.json" { "index.json" } else { file };
+    [format!("{RELEASE_SITE}/{file}"), format!("{CNB_RAW_MAIN}/{cnb_file}")]
+}
+
+fn fetch_first_json(
+    urls: &[String],
+    mut get: impl FnMut(&str) -> Result<Value, String>,
+) -> Result<Value, String> {
+    let mut errors = Vec::new();
+    for url in urls {
+        match get(url) {
+            Ok(v) => return Ok(v),
+            Err(e) => errors.push(e),
+        }
+    }
+    Err(errors.join("; "))
+}
+
 pub(crate) fn fetch_release_feed(file: &str, timeout_secs: u64) -> Result<Value, String> {
-    crate::catalog::http_get_json(&format!("{RELEASE_SITE}/{file}"), timeout_secs)
+    fetch_first_json(&release_feed_urls(file), |url| {
+        crate::catalog::http_get_json(url, timeout_secs)
+    })
 }
 
 /// Fetch announcements and release notes independently from the release website.
@@ -449,6 +474,37 @@ pub fn fetch(timeout_secs: u64) -> (Vec<PlazaItem>, Vec<ChangelogEntry>, Vec<Str
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn release_feed_falls_back_to_cnb() {
+        let urls = release_feed_urls("app.json");
+        assert_eq!(urls[0], format!("{RELEASE_SITE}/app.json"));
+        assert_eq!(urls[1], format!("{CNB_RAW_MAIN}/index.json"));
+        assert_eq!(release_feed_urls("plaza.json")[1], format!("{CNB_RAW_MAIN}/plaza.json"));
+
+        let mut tried = Vec::new();
+        let got = fetch_first_json(&urls, |url| {
+            tried.push(url.to_string());
+            if url.starts_with(RELEASE_SITE) {
+                Err("site down".into())
+            } else {
+                Ok(json!({"app": {}}))
+            }
+        });
+        assert_eq!(got.unwrap(), json!({"app": {}}));
+        assert_eq!(tried, urls.to_vec());
+
+        let err = fetch_first_json(&urls, |url| Err(format!("fail {url}"))).unwrap_err();
+        assert!(err.contains(RELEASE_SITE) && err.contains(CNB_RAW_MAIN));
+
+        let mut calls = 0;
+        fetch_first_json(&urls, |_| {
+            calls += 1;
+            Ok(json!(1))
+        })
+        .unwrap();
+        assert_eq!(calls, 1);
+    }
 
     #[test]
     fn the_three_badge_shapes() {

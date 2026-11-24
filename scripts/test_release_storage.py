@@ -99,3 +99,58 @@ class R2Tests(unittest.TestCase):
                 else:
                     with self.assertRaises(HTTPError):
                         storage.download_identity("https://example.test/a")
+
+
+class ModelScopeTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.installer = Path(self.temp.name) / "Setup-1.2.3.exe"
+        self.installer.write_bytes(b"signed installer")
+        self.sha = hashlib.sha256(self.installer.read_bytes()).hexdigest()
+        self.size = self.installer.stat().st_size
+        self.mirror = storage.ModelScopeMirror("owner/repo", "fabric/setup")
+        self.url = "https://modelscope.cn/models/owner/repo/resolve/c1/fabric/setup/Setup-1.2.3.exe"
+
+    def entry(self, **change):
+        return {"Type": "blob", "Path": "fabric/setup/Setup-1.2.3.exe", "Revision": "c1",
+                "Sha256": self.sha, "Size": self.size, **change}
+
+    def publish(self):
+        return self.mirror.publish(self.installer, "1.2.3", self.sha, self.size)
+
+    def test_existing_copy_is_reused_without_upload(self):
+        with patch.object(self.mirror, "listing", return_value=[self.entry()]), \
+             patch.object(storage.subprocess, "run") as run:
+            self.assertEqual(self.publish(), self.url)
+        run.assert_not_called()
+
+    def test_mismatched_or_unpinned_entries_are_ignored(self):
+        for change in ({"Sha256": "0" * 64}, {"Size": self.size + 1}, {"Revision": ""},
+                       {"Path": "fabric/setup/Other.exe"}):
+            with patch.object(self.mirror, "listing", return_value=[self.entry(**change)]):
+                self.assertIsNone(self.mirror.find(self.installer.name, self.sha, self.size))
+
+    def test_upload_then_verify_bytes(self):
+        listings = iter([[], [], [self.entry()]])
+        with patch.object(self.mirror, "listing", side_effect=lambda: next(listings)), \
+             patch.object(storage.shutil, "which", return_value="ms-hub"), \
+             patch.object(storage.subprocess, "run") as run, \
+             patch.object(storage.time, "sleep"), \
+             patch.object(storage, "download_identity", return_value=(self.sha, self.size)):
+            self.assertEqual(self.publish(), self.url)
+        args = run.call_args.args[0]
+        self.assertEqual(args[:4], ["ms-hub", "upload", "owner/repo", str(self.installer)])
+        self.assertEqual(args[4], "fabric/setup/Setup-1.2.3.exe")
+
+    def test_wrong_bytes_after_upload_fail(self):
+        with patch.object(self.mirror, "listing", side_effect=[[], [self.entry()]]), \
+             patch.object(storage.shutil, "which", return_value="ms-hub"), \
+             patch.object(storage.subprocess, "run"), \
+             patch.object(storage, "download_identity", return_value=("0" * 64, self.size)):
+            with self.assertRaises(ValueError):
+                self.publish()
+
+
+if __name__ == "__main__":
+    unittest.main()

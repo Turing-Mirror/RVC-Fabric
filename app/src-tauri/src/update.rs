@@ -288,9 +288,50 @@ fn single_child_dir(dir: &Path) -> Option<PathBuf> {
     }
 }
 
+/// Installer addresses to try in order: the one the updater picked, then the
+/// other https addresses listed in the same platform entry's `urls`.
+///
+/// Every address serves the same signed file, so the plugin's signature check
+/// applies to each attempt unchanged.
+fn installer_urls(raw: &Value, picked: &tauri::Url) -> Vec<tauri::Url> {
+    let mut urls = vec![picked.clone()];
+    let platforms = raw.get("platforms").and_then(Value::as_object);
+    let entry = platforms.and_then(|p| {
+        p.values()
+            .find(|e| e.get("url").and_then(Value::as_str) == Some(picked.as_str()))
+    });
+    let listed = entry.and_then(|e| e.get("urls")).and_then(Value::as_array);
+    for s in listed.into_iter().flatten().filter_map(Value::as_str) {
+        if let Ok(u) = tauri::Url::parse(s) {
+            if u.scheme() == "https" && !urls.contains(&u) {
+                urls.push(u);
+            }
+        }
+    }
+    urls
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn installer_falls_back_to_listed_urls() {
+        let r2 = "https://cdn.turingmirror.com/f/rvc-fabric/RVC-Fabric-Setup-1.9.0.exe";
+        let ms = "https://modelscope.cn/models/Kara251/kara-rvc-model/resolve/abc/fabric/setup/RVC-Fabric-Setup-1.9.0.exe";
+        let raw = json!({"platforms": {"windows-x86_64": {
+            "url": r2,
+            "signature": "s",
+            "urls": [r2, "http://example.com/a.exe", "not a url", ms]
+        }}});
+        let picked = tauri::Url::parse(r2).unwrap();
+        let got: Vec<String> = installer_urls(&raw, &picked).iter().map(|u| u.to_string()).collect();
+        assert_eq!(got, vec![r2.to_string(), ms.to_string()]);
+
+        // Feeds without `urls` (1.8.x and earlier) keep the single address.
+        let old = json!({"platforms": {"windows-x86_64": {"url": r2, "signature": "s"}}});
+        assert_eq!(installer_urls(&old, &picked), vec![picked.clone()]);
+    }
 
     /// index.json 的真实形状（build_catalog.py 生成的那种）。
     fn real_catalog(version: &str, pkg: &str, url: &str) -> Value {
@@ -436,10 +477,22 @@ pub async fn run_app_updater(app: &tauri::AppHandle) -> Result<Value, String> {
         return Ok(json!({"available": false, "local": APP_VERSION}));
     };
     let version = update.version.clone();
-    update
-        .download_and_install(|_chunk, _total| {}, || {})
-        .await
-        .map_err(|e| crate::i18n::te("s.90d174c86a", &(e)))?;
+    let mut errors = Vec::new();
+    let mut installed = false;
+    for url in installer_urls(&update.raw_json, &update.download_url) {
+        let mut attempt = update.clone();
+        attempt.download_url = url;
+        match attempt.download_and_install(|_chunk, _total| {}, || {}).await {
+            Ok(()) => {
+                installed = true;
+                break;
+            }
+            Err(e) => errors.push(e.to_string()),
+        }
+    }
+    if !installed {
+        return Err(crate::i18n::te("s.90d174c86a", &errors.join("; ")));
+    }
     Ok(json!({
         "available": true,
         "installed": true,

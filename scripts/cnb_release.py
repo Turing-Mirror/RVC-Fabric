@@ -1,4 +1,4 @@
-"""Publish signed RVC installers to Cloudflare R2 and push catalog metadata to CNB.
+"""Publish signed RVC installers to Cloudflare R2 and ModelScope, and push catalog metadata to CNB.
 
 Run after the GitHub release is public. Both public installer names are verified
 by SHA-256 and size before older versioned installers are deleted. Without
@@ -15,13 +15,14 @@ import tempfile
 
 import yaml
 
-from release_storage import R2Publisher, installer_url
+from release_storage import ModelScopeMirror, R2Publisher, installer_url
 
 
 PRODUCT = "Turing-Mirror/RVC-Fabric"
 CNB = "Turing-Mirror/RVC-Fabric-Releases"
 ORIGIN = f"https://cnb.cool/{CNB}"
 FIXED_NAME = "RVC_Fabric_Setup.exe"
+MODELSCOPE_REPO, MODELSCOPE_FOLDER = "Kara251/kara-rvc-model", "fabric/setup"
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = json.loads((ROOT / "app/package.json").read_text(encoding="utf-8"))["version"]
 NAME = URL = ""
@@ -133,6 +134,17 @@ def prepare_catalog(repo, scratch, signed, manifest, published_at):
 def mirror_setup(directory, signed):
     R2Publisher("rvc-fabric", "RVC-Fabric-Setup-", FIXED_NAME).publish(
         directory / NAME, VERSION, signed["sha256"], signed["size_bytes"])
+    return ModelScopeMirror(MODELSCOPE_REPO, MODELSCOPE_FOLDER).publish(
+        directory / NAME, VERSION, signed["sha256"], signed["size_bytes"])
+
+
+def list_installer_urls(repo, backup):
+    """Clients after 1.8.2 try `urls` in order when the first download fails."""
+    path = repo / "updater.json"
+    manifest = read_json(path)
+    platform = manifest["platforms"]["windows-x86_64"]
+    platform["urls"] = [URL, backup]
+    path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def main():
@@ -151,12 +163,12 @@ def main():
         if not args.publish:
             print("Checked the signed release and prepared the CNB catalog locally.")
             return
-        mirror_setup(scratch, signed)
+        list_installer_urls(repo, mirror_setup(scratch, signed))
         run(*git, "add", "--", *files, cwd=repo)
         if run(*git, "diff", "--cached", "--name-only", cwd=repo, capture=True):
             run(*git, "commit", "-m", f"Release RVC Fabric {VERSION}", cwd=repo)
             run(*git, "push", "origin", "HEAD:main", cwd=repo)
-        print(f"Cloudflare provides RVC Fabric {VERSION}; catalog metadata is published on CNB.")
+        print(f"Cloudflare and ModelScope provide RVC Fabric {VERSION}; catalog metadata is published on CNB.")
 
 
 if __name__ == "__main__":

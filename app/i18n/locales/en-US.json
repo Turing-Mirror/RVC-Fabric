@@ -1527,8 +1527,8 @@
     "stsF0FileClear": "Clear",
     "trainSaveEvery": "Save every",
     "trainSaveEveryHint": "How often progress is saved, in epochs. Only the latest large checkpoint is kept, so the disk does not fill up.",
-    "trainSaveWeights": "Exports an additional ready-to-use inference model at each save interval",
-    "trainSaveWeightsHint": "When enabled, you can audition saved models mid-training without waiting for all epochs to finish.",
+    "trainSaveWeights": "Save intermediate models",
+    "trainSaveWeightsHint": "Keep an extra usable model at each save interval. You can audition during training and switch epochs in the voice after training completes.",
     "trainExps": "Click an existing experiment to fill in the voice name",
     "trainSuggested": "Suggested {v0}",
     "trainGuideTitle": "Training a voice",
@@ -1995,7 +1995,7 @@
     "cleanupSnapshots": "Per-epoch weights",
     "cleanupCheckpoints": "Training checkpoints",
     "cleanupDataset": "Clean up temporary dataset files (sliced segments and feature caches)",
-    "cleanupEffectNone": "No impact",
+    "cleanupEffectNone": "You can no longer switch to these epochs after deleting",
     "cleanupEffectNoResume": "Training cannot be resumed afterwards",
     "cleanupEffectRestart": "Training must start again from preprocessing",
     "cleanupApply": "Clear selected",
@@ -2291,7 +2291,13 @@
     "setupNextStep": "Next step ready; click to open",
     "orbDownloadLabel": "View download progress",
     "communityDownloading": "Community download",
-    "communityDownloadCount": "{v0} tasks active"
+    "communityDownloadCount": "{v0} tasks active",
+    "modelVersionsTitle": "Training epochs",
+    "modelVersionEpoch": "Epoch {v0}",
+    "modelVersionFinal": "Final",
+    "modelVersionsSourceRemoved": "Currently using epoch {v0}; the source file has been deleted.",
+    "modelVersionsSourceRemovedUnknown": "The source file for the current version has been deleted.",
+    "modelVersionsExternal": "Currently using an external model file."
   },
   "extras": {
     "engineTitle": "Engine resources",
@@ -2575,5 +2581,11 @@
     "removeDraftConfirm": "Delete this draft?",
     "withdrawConfirm": "Withdraw this submission?",
     "saveFailed": "Could not save the draft on this device."
+  },
+  "modelVersions": {
+    "invalidTarget": "The voice does not exist or is not in the voice library.",
+    "invalidVersion": "The model for this epoch does not exist.",
+    "engineBusy": "Stop voice conversion or training before switching epochs.",
+    "installFailed": "Failed to switch the model."
   }
 }

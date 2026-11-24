@@ -1,4 +1,10 @@
 {
+  "modelVersions": {
+    "invalidTarget": "音色不存在或不在音色库中。",
+    "invalidVersion": "该轮次模型不存在。",
+    "engineBusy": "请先停止变声或训练，再切换轮次。",
+    "installFailed": "切换模型失败。"
+  },
   "mobile.pairing": "手机配对",
   "mobile.paired": "已配对移动端",
   "mobile.running": "移动端变声中",
@@ -1527,8 +1533,8 @@
     "stsF0FileClear": "清除",
     "trainSaveEvery": "保存间隔",
     "trainSaveEveryHint": "每隔多少轮保存一次进度。大权重文件仅保留最新一份，避免占用过多磁盘空间。",
-    "trainSaveWeights": "每隔指定保存周期额外导出一份可用的推理模型",
-    "trainSaveWeightsHint": "开启后可在训练中途试听已保存的模型，无需等待训练全部完成。",
+    "trainSaveWeights": "保存中途模型",
+    "trainSaveWeightsHint": "按保存间隔额外保留可用模型，训练途中可试听，训练完成后可在音色中切换轮次。",
     "trainExps": "点击已有实验名称，自动填入音色名",
     "trainSuggested": "建议 {v0}",
     "trainGuideTitle": "训练音色",
@@ -1995,7 +2001,7 @@
     "cleanupSnapshots": "按轮次另存的推理模型",
     "cleanupCheckpoints": "训练检查点",
     "cleanupDataset": "清理数据集临时文件（切分片段与特征缓存）",
-    "cleanupEffectNone": "删除后无影响",
+    "cleanupEffectNone": "删除后无法再切换到这些轮次",
     "cleanupEffectNoResume": "删除后不能续训",
     "cleanupEffectRestart": "删除后需从预处理重新开始",
     "cleanupApply": "清除所选",
@@ -2291,7 +2297,13 @@
     "setupNextStep": "有待确认的步骤，点击打开",
     "orbDownloadLabel": "查看下载进度",
     "communityDownloading": "社区后台下载",
-    "communityDownloadCount": "共 {v0} 项任务"
+    "communityDownloadCount": "共 {v0} 项任务",
+    "modelVersionsTitle": "训练轮次",
+    "modelVersionEpoch": "第 {v0} 轮",
+    "modelVersionFinal": "最终",
+    "modelVersionsSourceRemoved": "当前使用第 {v0} 轮，源文件已删除。",
+    "modelVersionsSourceRemovedUnknown": "当前版本的源文件已删除。",
+    "modelVersionsExternal": "当前使用的是外部模型文件。"
   },
   "extras": {
     "engineTitle": "引擎资源",

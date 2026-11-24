@@ -1527,8 +1527,8 @@
     "stsF0FileClear": "Quitar",
     "trainSaveEvery": "Guardar cada",
     "trainSaveEveryHint": "Cada cuántas épocas se guarda el progreso. Solo se conserva el último punto de control grande, así el disco no se llena.",
-    "trainSaveWeights": "Exporta un modelo de inferencia adicional listo para usar en cada intervalo de guardado",
-    "trainSaveWeightsHint": "Al activarlo, puede escuchar los modelos guardados durante el entrenamiento sin esperar a que terminen todas las épocas.",
+    "trainSaveWeights": "Guardar modelos intermedios",
+    "trainSaveWeightsHint": "Conserva un modelo utilizable adicional en cada intervalo de guardado para escucharlo durante el entrenamiento y cambiar de época en la voz al finalizar.",
     "trainExps": "Pulse un experimento existente para rellenar el nombre de la voz",
     "trainSuggested": "Sugerido {v0}",
     "trainGuideTitle": "Entrenar una voz",
@@ -1995,7 +1995,7 @@
     "cleanupSnapshots": "Pesos guardados por época",
     "cleanupCheckpoints": "Puntos de control de entrenamiento",
     "cleanupDataset": "Limpiar archivos temporales del conjunto de datos (fragmentos cortados y caché de características)",
-    "cleanupEffectNone": "Sin consecuencias",
+    "cleanupEffectNone": "Después de eliminarlos no podrás cambiar a estas épocas",
     "cleanupEffectNoResume": "Después no se podrá reanudar el entrenamiento",
     "cleanupEffectRestart": "Habrá que empezar de nuevo desde el preprocesamiento",
     "cleanupApply": "Eliminar lo seleccionado",
@@ -2291,7 +2291,13 @@
     "setupNextStep": "Siguiente paso listo; haz clic para abrir",
     "orbDownloadLabel": "Ver progreso de descarga",
     "communityDownloading": "Descarga de Comunidad",
-    "communityDownloadCount": "{v0} tareas activas"
+    "communityDownloadCount": "{v0} tareas activas",
+    "modelVersionsTitle": "Épocas de entrenamiento",
+    "modelVersionEpoch": "Época {v0}",
+    "modelVersionFinal": "Final",
+    "modelVersionsSourceRemoved": "Se está usando la época {v0}; el archivo fuente fue eliminado.",
+    "modelVersionsSourceRemovedUnknown": "El archivo fuente de la versión actual fue eliminado.",
+    "modelVersionsExternal": "Se está usando un archivo de modelo externo."
   },
   "extras": {
     "engineTitle": "Recursos del motor",
@@ -2575,5 +2581,11 @@
     "removeDraftConfirm": "¿Eliminar este borrador?",
     "withdrawConfirm": "¿Retirar este envío?",
     "saveFailed": "No se pudo guardar el borrador en este dispositivo."
+  },
+  "modelVersions": {
+    "invalidTarget": "La voz no existe o no se encuentra en la biblioteca.",
+    "invalidVersion": "El modelo de esta época no existe.",
+    "engineBusy": "Detén la conversión de voz o el entrenamiento antes de cambiar de época.",
+    "installFailed": "Error al cambiar el modelo."
   }
 }

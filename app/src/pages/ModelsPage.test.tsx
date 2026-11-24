@@ -186,3 +186,176 @@ describe("模型页使用中徽标", () => {
     expect(kindButton(m, "dsp").classList.contains("text-[var(--ink)]")).toBe(true);
   });
 });
+
+describe("模型页训练轮次", () => {
+  const USER_CATALOG = {
+    models: [
+      { name: "甲", path: "m/a/a.pth", file: "a.pth", dir: "m/a", source: "user_data" },
+      { name: "外部", path: "legacy/x.pth", file: "x.pth", dir: "", source: "legacy_weights" },
+    ],
+  };
+
+  function makeModelVersions(count = 2, opts?: {
+    experiment?: string | null;
+    state?: "matched" | "source_removed" | "external" | "missing";
+    currentEpoch?: number | null;
+    activeFile?: string;
+  }) {
+    const activeFile = opts?.activeFile ?? "a_e100.pth";
+    const versions = Array.from({ length: count }, (_, idx) => {
+      const epoch = (idx + 1) * 50;
+      const file = `a_e${epoch}.pth`;
+      return {
+        file,
+        epoch,
+        step: null,
+        is_final: idx === count - 1,
+        current: file === activeFile,
+      };
+    });
+    return {
+      experiment: opts && "experiment" in opts ? opts.experiment : "a",
+      weights_dir: "C:/weights",
+      weights: [
+        {
+          kind: "rvc",
+          current: {
+            state: opts?.state ?? "matched",
+            file: activeFile,
+            epoch: opts && "currentEpoch" in opts ? opts.currentEpoch : 100,
+            step: null,
+          },
+          versions,
+        },
+      ],
+    };
+  }
+
+  beforeEach(() => {
+    (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
+    invalidateVoicesCache();
+    tauri.invoke.mockReset();
+  });
+
+  afterEach(() => {
+    while (mounts.length) mounts.pop()?.unmount();
+    invalidateVoicesCache();
+    delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
+  });
+
+  it("hides training epochs block when experiment is null or versions are empty or voice is not user_data", async () => {
+    tauri.invoke.mockImplementation((cmd) => {
+      if (cmd === "voices_list") return Promise.resolve(USER_CATALOG);
+      if (cmd === "config_get") return Promise.resolve({});
+      if (cmd === "model_versions_list") return Promise.resolve(makeModelVersions(0, { experiment: null }));
+      return Promise.resolve({ items: [] });
+    });
+
+    const m = mount(<ModelsPage currentId="m/a/a.pth" />);
+    mounts.push(m);
+    await tick();
+    await tick();
+    expect(m.container.textContent).not.toContain(t("s.modelVersionsTitle"));
+
+    act(() => m.root.render(<ModelsPage currentId="legacy/x.pth" />));
+    await tick();
+    expect(m.container.textContent).not.toContain(t("s.modelVersionsTitle"));
+  });
+
+  it("renders versions with final badge and switches version on click", async () => {
+    let versionsState = makeModelVersions(2, { activeFile: "a_e100.pth" });
+    tauri.invoke.mockImplementation((cmd, args) => {
+      if (cmd === "voices_list") return Promise.resolve(USER_CATALOG);
+      if (cmd === "config_get") return Promise.resolve({});
+      if (cmd === "model_versions_list") return Promise.resolve(versionsState);
+      if (cmd === "model_version_apply") {
+        const { file } = args as { file: string };
+        versionsState = makeModelVersions(2, { activeFile: file });
+        return Promise.resolve(versionsState);
+      }
+      return Promise.resolve({ items: [] });
+    });
+
+    const m = mount(<ModelsPage currentId="m/a/a.pth" />);
+    mounts.push(m);
+    await tick();
+    await tick();
+
+    expect(m.container.textContent).toContain(t("s.modelVersionsTitle"));
+    expect(m.container.textContent).toContain(t("s.modelVersionEpoch", { v0: 50 }));
+    expect(m.container.textContent).toContain(t("s.modelVersionEpoch", { v0: 100 }));
+    expect(m.container.textContent).toContain(t("s.modelVersionFinal"));
+
+    // Click "使用" inside the training epochs block (for epoch 50)
+    const section = [...m.container.querySelectorAll("section, div")]
+      .find((el) => el.querySelector("h2, h3")?.textContent === t("s.modelVersionsTitle"));
+    const useBtn = [...(section ?? m.container).querySelectorAll("button")]
+      .find((b) => b.textContent === t("s.0e2d3a3c09") && !b.disabled);
+    expect(useBtn).toBeDefined();
+    await act(async () => useBtn!.click());
+    await tick();
+    await tick();
+
+    expect(tauri.invoke).toHaveBeenCalledWith("model_version_apply", {
+      target: "m/a",
+      kind: "rvc",
+      file: "a_e50.pth",
+    });
+  });
+
+  it("renders source_removed and external notes", async () => {
+    let state: "source_removed" | "external" = "source_removed";
+    let currentEpoch: number | null = 75;
+    tauri.invoke.mockImplementation((cmd) => {
+      if (cmd === "voices_list") return Promise.resolve(USER_CATALOG);
+      if (cmd === "config_get") return Promise.resolve({});
+      if (cmd === "model_versions_list") return Promise.resolve(makeModelVersions(2, { state, currentEpoch }));
+      return Promise.resolve({ items: [] });
+    });
+
+    const m = mount(<ModelsPage currentId="m/a/a.pth" />);
+    mounts.push(m);
+    await tick();
+    await tick();
+    expect(m.container.textContent).toContain(t("s.modelVersionsSourceRemoved", { v0: 75 }));
+
+    currentEpoch = null;
+    act(() => m.root.render(<ModelsPage key="unknown" currentId="m/a/a.pth" />));
+    await tick();
+    await tick();
+    expect(m.container.textContent).toContain(t("s.modelVersionsSourceRemovedUnknown"));
+
+    state = "external";
+    act(() => m.root.render(<ModelsPage key="ext" currentId="m/a/a.pth" />));
+    await tick();
+    await tick();
+    expect(m.container.textContent).toContain(t("s.modelVersionsExternal"));
+  });
+
+  it("paginates training epochs at 8 items per page", async () => {
+    tauri.invoke.mockImplementation((cmd) => {
+      if (cmd === "voices_list") return Promise.resolve(USER_CATALOG);
+      if (cmd === "config_get") return Promise.resolve({});
+      if (cmd === "model_versions_list") return Promise.resolve(makeModelVersions(10, { activeFile: "a_e500.pth" }));
+      return Promise.resolve({ items: [] });
+    });
+
+    const m = mount(<ModelsPage currentId="m/a/a.pth" />);
+    mounts.push(m);
+    await tick();
+    await tick();
+
+    expect(m.container.textContent).toContain(t("s.modelVersionEpoch", { v0: 50 }));
+    expect(m.container.textContent).toContain(t("s.modelVersionEpoch", { v0: 400 }));
+    expect(m.container.textContent).not.toContain(t("s.modelVersionEpoch", { v0: 450 }));
+
+    const page2Btn = [...m.container.querySelectorAll("button")]
+      .find((b) => b.dataset.k === "p2" || b.textContent?.trim() === "2");
+    expect(page2Btn).toBeDefined();
+    await act(async () => page2Btn!.click());
+    await tick();
+
+    expect(m.container.textContent).toContain(t("s.modelVersionEpoch", { v0: 450 }));
+    expect(m.container.textContent).toContain(t("s.modelVersionEpoch", { v0: 500 }));
+  });
+});

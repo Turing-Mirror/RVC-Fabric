@@ -346,6 +346,11 @@ def publish_voice(root, req, weights, index_path):
         data["name"] = req["exp"]
         data["source"] = "trained"
         data["sample_rate"] = req["sample_rate"]
+        data["training"] = {
+            "experiment": req["exp"],
+            "weights_dir": str((root / "assets" / "weights").resolve()),
+            "final": {"rvc": {"file": Path(weights).name, "epoch": req.get("total_epoch"), "step": None}},
+        }
         sidecar.write_text(
             json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
         )
@@ -757,7 +762,7 @@ def stage_train(req, exp_dir, py, root, n_stages):
         "-pd", str(pd),
         "-l", "1",   # 只留最新的 G/D，不然 200 轮能吃掉几十 GB
         "-c", "0",   # 不缓存数据集进显存：家用卡缓存进去就没地方训练了
-        "-sw", "1" if req.get("save_every_weights") else "0",
+        "-sw", "1" if req.get("save_every_weights", True) else "0",
         "-v", VERSION,
     ]
     # train.py 的 n_gpus 是 torch.cuda.device_count() 数出来的，不看 -g；-g 只
@@ -891,7 +896,7 @@ def normalize(raw):
         "device": device,
         "is_half": bool(raw.get("is_half", device == "cuda")),
         "resume": bool(raw.get("resume", False)),
-        "save_every_weights": bool(raw.get("save_every_weights", False)),
+        "save_every_weights": bool(raw.get("save_every_weights", True)),
         # 空 = 老行为（放 User_Data/models）。合法性由壳那边判过了，这里不再
         # 二次校验：worker 是被壳启动的，不是用户直接调的。
         "output_dir": str(raw.get("output_dir") or "").strip(),

@@ -3025,6 +3025,23 @@ if __name__ == "__main__":
             # 丢音色也是一次「应用」：空目标提交成功，model_active 归 null。
             self._emit_model_apply(seq=seq, phase="committed")
 
+        def _worker_invalidate_model(self, seq=0):
+            """同路径换权重后丢弃空闲模型，保留选用的音色和检索库配置。"""
+            with self._pending_model_lock:
+                self._prewarm_generation = getattr(self, "_prewarm_generation", 0) + 1
+                self._prewarmed = None
+                self._pending_model = None
+                self._swap_ready = None
+            self._swap_busy = False
+            self.rvc = None
+            self.resampler2 = None
+            import gc
+
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            self._worker_write_status(model_active=None, model_cache_seq=int(seq or 0))
+
         def _ckpt_tgt_sr(self, pth: str):
             """只读出这个权重的目标采样率，不建模型。
 
@@ -3192,6 +3209,7 @@ if __name__ == "__main__":
                     self._prewarmed = None
                     del warm
                 self._prewarm_busy = True
+                generation = getattr(self, "_prewarm_generation", 0)
                 def _prewarm_job():
                     try:
                         if flag_vc:
@@ -3212,7 +3230,9 @@ if __name__ == "__main__":
                         if getattr(new, "tgt_sr", 0) and getattr(new, "net_g", None) is not None:
                             new.pth_path_str = pth
                             new.index_path_str = str(saved.get("index_path") or "")
-                            self._prewarmed = new
+                            with self._pending_model_lock:
+                                if generation == getattr(self, "_prewarm_generation", 0):
+                                    self._prewarmed = new
                             printt("预热：完成")
                         else:
                             printt("预热：模型读取失败，忽略")
@@ -4291,6 +4311,8 @@ if __name__ == "__main__":
                                 pass
                             elif action == "prewarm":
                                 self._cmd_prewarm()
+                            elif action == "invalidate_model":
+                                self._worker_invalidate_model(seq)
                             elif action == "set":
                                 params = (
                                     cmd.get("params")

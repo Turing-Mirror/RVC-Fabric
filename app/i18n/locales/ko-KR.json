@@ -1527,8 +1527,8 @@
     "stsF0FileClear": "지우기",
     "trainSaveEvery": "저장 간격",
     "trainSaveEveryHint": "몇 에포크마다 진행 상황을 저장할지 정합니다. 대형 가중치는 최신 하나만 남아 디스크가 가득 차지 않습니다.",
-    "trainSaveWeights": "지정한 저장 주기마다 바로 사용할 수 있는 추론 모델을 추가로 내보냅니다",
-    "trainSaveWeightsHint": "켜면 전체 학습이 끝나기를 기다리지 않고 중간에 저장된 모델을 들어볼 수 있습니다.",
+    "trainSaveWeights": "중간 모델 저장",
+    "trainSaveWeightsHint": "저장 간격마다 사용 가능한 모델을 추가로 보관합니다. 학습 도중 미리 들어보거나, 학습 완료 후 보이스에서 에폭을 전환할 수 있습니다.",
     "trainExps": "기존 실험을 클릭하면 음색 이름에 채워집니다",
     "trainSuggested": "권장 {v0}",
     "trainGuideTitle": "음색 학습",
@@ -1995,7 +1995,7 @@
     "cleanupSnapshots": "에폭별 저장 모델",
     "cleanupCheckpoints": "학습 체크포인트",
     "cleanupDataset": "데이터셋 임시 파일 정리(분할된 조각 및 특징 캐시)",
-    "cleanupEffectNone": "삭제해도 영향 없음",
+    "cleanupEffectNone": "삭제하면 해당 에폭으로 전환할 수 없습니다",
     "cleanupEffectNoResume": "삭제하면 학습을 이어서 할 수 없습니다",
     "cleanupEffectRestart": "삭제하면 전처리부터 다시 시작해야 합니다",
     "cleanupApply": "선택 항목 삭제",
@@ -2291,7 +2291,13 @@
     "setupNextStep": "다음 단계가 있습니다. 클릭하여 열기",
     "orbDownloadLabel": "다운로드 진행률 보기",
     "communityDownloading": "커뮤니티 다운로드",
-    "communityDownloadCount": "작업 {v0}개 진행 중"
+    "communityDownloadCount": "작업 {v0}개 진행 중",
+    "modelVersionsTitle": "학습 에폭",
+    "modelVersionEpoch": "{v0} 에폭",
+    "modelVersionFinal": "최종",
+    "modelVersionsSourceRemoved": "현재 {v0} 에폭을 사용 중이며 원본 파일이 삭제되었습니다.",
+    "modelVersionsSourceRemovedUnknown": "현재 버전의 원본 파일이 삭제되었습니다.",
+    "modelVersionsExternal": "현재 외부 모델 파일을 사용하고 있습니다."
   },
   "extras": {
     "engineTitle": "엔진 리소스",
@@ -2575,5 +2581,11 @@
     "removeDraftConfirm": "이 초안을 삭제할까요?",
     "withdrawConfirm": "이 제출을 철회할까요?",
     "saveFailed": "이 기기에 초안을 저장할 수 없습니다."
+  },
+  "modelVersions": {
+    "invalidTarget": "보이스가 존재하지 않거나 라이브러리에 없습니다.",
+    "invalidVersion": "해당 에폭의 모델이 존재하지 않습니다.",
+    "engineBusy": "에폭을 전환하기 전에 음성 변환 또는 학습을 먼저 중지하세요.",
+    "installFailed": "모델 전환에 실패했습니다."
   }
 }

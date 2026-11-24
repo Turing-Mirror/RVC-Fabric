@@ -69,7 +69,7 @@ class NormalizeTests(unittest.TestCase):
         self.assertEqual(r["sample_rate"], "48k")
         self.assertEqual(r["total_epoch"], 200)
         self.assertEqual(r["f0_method"], "rmvpe")
-        self.assertFalse(r["save_every_weights"])
+        self.assertTrue(r["save_every_weights"])
         self.assertGreaterEqual(r["n_cpu"], 1)
 
     def test_rejects_unknown_f0_method(self):
@@ -89,6 +89,9 @@ class NormalizeTests(unittest.TestCase):
     def test_half_precision_follows_the_device(self):
         self.assertTrue(tw.normalize({"exp": "x", "device": "cuda"})["is_half"])
         self.assertFalse(tw.normalize({"exp": "x", "device": "cpu"})["is_half"])
+
+    def test_explicitly_disabled_snapshot_saving_stays_disabled(self):
+        self.assertFalse(tw.normalize({"exp": "x", "save_every_weights": False})["save_every_weights"])
 
 
 class TrainLogParsingTests(unittest.TestCase):
@@ -227,6 +230,28 @@ class MetaSrTests(unittest.TestCase):
 
 
 class PublishVoiceTests(unittest.TestCase):
+    def test_training_origin_and_final_epoch_are_merged_into_existing_metadata(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            weights = root / "assets/weights/voice.+test.pth"
+            weights.parent.mkdir(parents=True)
+            weights.write_bytes(b"final")
+            dest = root / "User_Data/models/voice.+test"
+            dest.mkdir(parents=True)
+            (dest / "config.json").write_text(json.dumps({
+                "author": "Author", "cover": "cover.png", "pitch": -2,
+                "training": {"selected": {"rvc": {"file": "old.pth"}}},
+            }), encoding="utf-8")
+            self.assertIsNotNone(tw.publish_voice(root, {
+                "exp": "voice.+test", "sample_rate": "48k", "total_epoch": 23,
+            }, weights, None))
+            side = json.loads((dest / "config.json").read_text(encoding="utf-8"))
+            self.assertEqual((side["author"], side["cover"], side["pitch"]), ("Author", "cover.png", -2))
+            self.assertEqual(side["training"], {
+                "experiment": "voice.+test", "weights_dir": str(weights.parent.resolve()),
+                "final": {"rvc": {"file": weights.name, "epoch": 23, "step": None}},
+            })
+
     def test_copies_pth_and_index_into_user_models(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)

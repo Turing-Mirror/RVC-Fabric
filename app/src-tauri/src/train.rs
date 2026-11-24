@@ -997,6 +997,14 @@ pub(crate) fn realtime_start_guard() -> Result<std::sync::MutexGuard<'static, ()
     Ok(guard)
 }
 
+pub(crate) fn model_version_guard(root: &Path) -> Result<std::sync::MutexGuard<'static, ()>, String> {
+    let guard = START_GATE.lock().unwrap_or_else(|e| e.into_inner());
+    if busy() || realtime_active(root) {
+        return Err(crate::i18n::t("modelVersions.engineBusy"));
+    }
+    Ok(guard)
+}
+
 fn realtime_requested(status: &Value, command: &Value) -> bool {
     if matches!(
         status["state"].as_str(),
@@ -1048,7 +1056,7 @@ pub struct TrainReq {
     pub save_every: u32,
     pub f0_method: String,
     pub resume: bool,
-    #[serde(default)]
+    #[serde(default = "save_weights_default")]
     pub save_every_weights: bool,
     /// 训好的音色放哪。空 = `User_Data/models`（老行为）。
     ///
@@ -1060,6 +1068,10 @@ pub struct TrainReq {
 }
 
 const F0_METHODS: [&str; 4] = ["rmvpe", "harvest", "pm", "dio"];
+
+fn save_weights_default() -> bool {
+    true
+}
 
 /// 原版 `default_batch_size = VRAM_GB // 2`。查不到就给 4（6GB 卡的稳妥值）。
 fn suggested_batch() -> u32 {
@@ -2123,6 +2135,8 @@ mod tests {
     fn realtime_admission_covers_pending_start_without_treating_idle_as_active() {
         assert!(realtime_requested(&json!({"state":"running"}), &json!({})));
         assert!(realtime_requested(&json!({"state":"starting"}), &json!({})));
+        assert!(realtime_requested(&json!({"state":"stopping"}), &json!({})));
+        assert!(realtime_requested(&json!({"state":"restarting"}), &json!({})));
         assert!(realtime_requested(
             &json!({"state":"idle","last_cmd_seq":4}),
             &json!({"cmd":"start","seq":5})
@@ -2135,5 +2149,18 @@ mod tests {
             &json!({"state":"idle","last_cmd_seq":4}),
             &json!({"cmd":"set","seq":5})
         ));
+    }
+
+    #[test]
+    fn snapshot_saving_defaults_on_and_explicit_false_survives_queue_serialization() {
+        let mut raw = json!({"exp":"voice", "dataset":"data", "sample_rate":"48k", "total_epoch":23,
+            "batch_size":4, "save_every":5, "f0_method":"rmvpe", "resume":false});
+        let defaults: TrainReq = serde_json::from_value(raw.clone()).unwrap();
+        assert!(defaults.save_every_weights);
+        raw["save_every_weights"] = json!(false);
+        let disabled: TrainReq = serde_json::from_value(raw).unwrap();
+        assert!(!disabled.save_every_weights);
+        let persisted: TrainReq = serde_json::from_value(serde_json::to_value(disabled).unwrap()).unwrap();
+        assert!(!persisted.save_every_weights);
     }
 }

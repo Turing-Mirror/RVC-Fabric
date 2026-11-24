@@ -352,7 +352,7 @@ pub(crate) fn read_sidecar(folder: &Path) -> Map<String, Value> {
     v.as_object().cloned().unwrap_or_default()
 }
 
-fn write_sidecar(folder: &Path, side: &Map<String, Value>) -> Result<(), String> {
+pub(crate) fn write_sidecar(folder: &Path, side: &Map<String, Value>) -> Result<(), String> {
     write_json_atomic(&folder.join("config.json"), &Value::Object(side.clone()))
 }
 
@@ -774,9 +774,21 @@ pub fn list_voices(root: &Path) -> Value {
         .map(|s| s.to_ascii_lowercase())
         .collect();
 
+    let cfg = load_app_config(root);
+    let selected = cfg.get("last_model_path").and_then(Value::as_str)
+        .and_then(|p| Path::new(p).canonicalize().ok());
+    let trained_experiments: std::collections::HashSet<String> = primary.iter().filter_map(|voice| {
+        if !Path::new(voice["path"].as_str()?).is_file() { return None; }
+        let dir = Path::new(voice["dir"].as_str()?);
+        crate::model_versions::training_source(root, dir, &read_sidecar(dir)).map(|s| s.experiment)
+    }).collect();
     for m in list_legacy(root) {
         let path = m.get("path").and_then(|v| v.as_str()).unwrap_or("");
         let file = m.get("file").and_then(|v| v.as_str()).unwrap_or("");
+        let is_selected = selected.as_ref().is_some_and(|p| Path::new(path).canonicalize().ok().as_ref() == Some(p));
+        if !is_selected && trained_experiments.iter().any(|exp| crate::train::is_epoch_snapshot(exp, file)) {
+            continue;
+        }
         let rp = PathBuf::from(path)
             .canonicalize()
             .map(|p| p.to_string_lossy().into_owned())
@@ -790,7 +802,6 @@ pub fn list_voices(root: &Path) -> Value {
         primary.push(m);
     }
 
-    let cfg = load_app_config(root);
     let selected_path = cfg
         .get("last_model_path")
         .and_then(|v| v.as_str())
@@ -1118,7 +1129,7 @@ pub fn list_index_bindings(root: &Path, model_dir: &str) -> Result<Value, String
     Ok(json!({ "items": items, "active": active, "model_dir": model_dir }))
 }
 
-fn guard_model_dir(root: &Path, md: &Path) -> Result<(), String> {
+pub(crate) fn guard_model_dir(root: &Path, md: &Path) -> Result<(), String> {
     let models = paths::models_dir(root);
     let Ok(md_c) = md.canonicalize() else {
         return Err(crate::i18n::t("s.3c07b16355").into());
@@ -2938,7 +2949,8 @@ mod tests {
         fs::write(md.join("alice.index"), vec![2u8; 2000]).unwrap();
         fs::write(md.join("private.log"), "not for sharing").unwrap();
         fs::write(md.join("cover.png"), [0x89u8, 0x50, 0x4e, 0x47, 13, 10, 26, 10]).unwrap();
-        write_sidecar(&md, &json!({"name":"Alice", "pitch":2, "index":"alice.index", "cover":"cover.png", "pth_path":"/private/source.pth"}).as_object().unwrap().clone()).unwrap();
+        write_sidecar(&md, &json!({"name":"Alice", "pitch":2, "index":"alice.index", "cover":"cover.png", "pth_path":"/private/source.pth",
+            "training":{"experiment":"private", "weights_dir":"/private/weights", "selected":{"rvc":{"file":"local.pth"}}}}).as_object().unwrap().clone()).unwrap();
         fs::write(profiles_dir(&md).join("abc.tmvp"), r#"{"id":"abc","name":"Soft","voice":{"pitch":3,"pth_path":"/private/hidden.pth"}}"#).unwrap();
         let zip_path = root.join("alice.zip");
         export_model(&root, &md.to_string_lossy(), &zip_path).unwrap();
@@ -2947,6 +2959,7 @@ mod tests {
         let mut text = String::new();
         std::io::Read::read_to_string(&mut archive.by_name("config.json").unwrap(), &mut text).unwrap();
         assert!(!text.contains("/private/"));
+        assert!(serde_json::from_str::<Value>(&text).unwrap().get("training").is_none());
         assert!(archive.by_name("profiles/abc.tmvp").is_ok());
         let target = scratch("export-import");
         let result = import_files(&target, &[zip_path.to_string_lossy().into_owned()], None).unwrap();

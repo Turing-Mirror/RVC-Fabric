@@ -273,7 +273,7 @@ export function TrainPanel() {
   }, []);
   const [f0, setF0] = useState<(typeof F0_OPTS)[number]>("rmvpe");
   const [saveEvery, setSaveEvery] = useState(5);
-  const [saveWeights, setSaveWeights] = useState(false);
+  const [saveWeights, setSaveWeights] = useState(true);
   const prog = active?.progress;
   const [msg, setMsg] = useState("");
   // 配一个能按的按钮要靠错误码，光有文案认不出来是哪一类错。

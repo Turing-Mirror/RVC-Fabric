@@ -1527,8 +1527,8 @@
     "stsF0FileClear": "消す",
     "trainSaveEvery": "保存間隔",
     "trainSaveEveryHint": "進捗を何エポックごとに保存するかです。大きな重みは最新 1 つのみ残るため、ディスクが圧迫されることはありません。",
-    "trainSaveWeights": "指定した保存周期ごとに、すぐ使用できる推論モデルを追加で書き出します",
-    "trainSaveWeightsHint": "有効にすると、全エポックの完了を待たずに学習途中のモデルを試聴できます。",
+    "trainSaveWeights": "途中のモデルを保存",
+    "trainSaveWeightsHint": "保存間隔ごとに使用可能なモデルを追加で保存します。学習中の試聴や、学習完了後のボイス内でのエポック切り替えができます。",
     "trainExps": "既存の実験をクリックすると音色名に反映されます",
     "trainSuggested": "目安 {v0}",
     "trainGuideTitle": "音声の学習",
@@ -1995,7 +1995,7 @@
     "cleanupSnapshots": "エポックごとの保存モデル",
     "cleanupCheckpoints": "学習チェックポイント",
     "cleanupDataset": "データセットの一時ファイルを整理（分割セグメントと特徴量キャッシュ）",
-    "cleanupEffectNone": "削除しても影響なし",
+    "cleanupEffectNone": "削除するとこれらのエポックに切り替えられなくなります",
     "cleanupEffectNoResume": "削除すると学習を再開できません",
     "cleanupEffectRestart": "削除すると前処理からやり直しになります",
     "cleanupApply": "選択項目を削除",
@@ -2291,7 +2291,13 @@
     "setupNextStep": "次の手順があります。クリックして開く",
     "orbDownloadLabel": "ダウンロード進捗を表示",
     "communityDownloading": "コミュニティのダウンロード",
-    "communityDownloadCount": "進行中 {v0} 件"
+    "communityDownloadCount": "進行中 {v0} 件",
+    "modelVersionsTitle": "学習エポック",
+    "modelVersionEpoch": "エポック {v0}",
+    "modelVersionFinal": "最終",
+    "modelVersionsSourceRemoved": "現在はエポック {v0} を使用中ですが、元ファイルは削除されています。",
+    "modelVersionsSourceRemovedUnknown": "現在のバージョンの元ファイルは削除されています。",
+    "modelVersionsExternal": "現在は外部モデルファイルを使用しています。"
   },
   "extras": {
     "engineTitle": "エンジンリソース",
@@ -2575,5 +2581,11 @@
     "removeDraftConfirm": "この下書きを削除しますか？",
     "withdrawConfirm": "この投稿を取り下げますか？",
     "saveFailed": "この端末に下書きを保存できませんでした。"
+  },
+  "modelVersions": {
+    "invalidTarget": "ボイスが存在しないか、ライブラリ内にありません。",
+    "invalidVersion": "このエポックのモデルは存在しません。",
+    "engineBusy": "エポックを切り替える前にボイスチェンジャーまたは学習を停止してください。",
+    "installFailed": "モデルの切り替えに失敗しました。"
   }
 }

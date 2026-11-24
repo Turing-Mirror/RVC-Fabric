@@ -1802,6 +1802,20 @@ pub fn drop_model(root: &Path) -> Result<u64, String> {
     set_hot(root, payload)
 }
 
+/// Invalidate idle inference/prewarm references after replacing weights at the same path.
+pub(crate) fn invalidate_model_cache(root: &Path) -> Result<(), String> {
+    if !is_worker_alive(root) { return Ok(()); }
+    let seq = send_command(root, "invalidate_model", Map::new())?;
+    let deadline = Instant::now() + Duration::from_secs(12);
+    while Instant::now() < deadline {
+        if !is_worker_alive(root) { return Ok(()); }
+        let status = protocol::read_status(root);
+        if status["model_cache_seq"].as_u64().unwrap_or(0) >= seq { return Ok(()); }
+        thread::sleep(Duration::from_millis(50));
+    }
+    Err(crate::i18n::t("s.modelApplyUnconfirmed"))
+}
+
 /// Snapshot for the UI (status + derived meter 0..1).
 pub fn status_for_ui(root: &Path) -> Value {
     let mut st = protocol::read_status(root);

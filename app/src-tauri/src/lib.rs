@@ -49,6 +49,7 @@ mod local_api;
 mod logging;
 mod mic;
 mod mobile;
+mod model_versions;
 mod mirrors;
 pub mod paths;
 pub mod plaza;
@@ -2353,6 +2354,25 @@ fn provision_cancel() -> Result<(), String> {
 // ----- Stage 4: voices + store ------------------------------------------------
 
 #[tauri::command]
+async fn model_versions_list(state: State<'_, Mutex<AppState>>, target: String) -> Result<model_versions::ModelVersions, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || model_versions::list(&root, &target))
+        .await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn model_version_apply(
+    app: AppHandle, state: State<'_, Mutex<AppState>>, target: String, kind: String, file: String,
+) -> Result<model_versions::ModelVersions, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let result = model_versions::apply(&root, &target, &kind, &file)?;
+        let _ = app.emit("voices-changed", json!({"dir": target}));
+        Ok(result)
+    }).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 async fn voices_list(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
     let root = root_clone(&state)?;
     // Walks the whole voice library; a large one is a visible stall on the IPC
@@ -2980,6 +3000,8 @@ pub fn run() {
             provision_cancel,
             voices_list,
             voices_select,
+            model_versions_list,
+            model_version_apply,
             voices_clear,
             voices_current,
             voices_index_list,

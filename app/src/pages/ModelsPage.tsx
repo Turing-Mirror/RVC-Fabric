@@ -62,6 +62,9 @@ import {
   type VoiceModel,
 } from "../lib/voices";
 import { Leave } from "../components/Presence";
+import { applyModelVersion, listModelVersions, type ModelVersions } from "../lib/modelVersions";
+
+const VERSION_PAGE_SIZE = 8;
 
 type SortKey = "default" | "name" | "index";
 /** 列表看的是哪一种东西。RVC 音色和 DSP 预设不混排。 */
@@ -206,6 +209,9 @@ function ModelsPageImpl({
   }, [dspId, onVoiceChange]);
   const [indexItems, setIndexItems] = useState<IndexItem[]>([]);
   const [profiles, setProfiles] = useState<ProfileItem[]>([]);
+  const [modelVersions, setModelVersions] = useState<ModelVersions | null>(null);
+  const [versionPage, setVersionPage] = useState(1);
+  const [applyingVersion, setApplyingVersion] = useState("");
   const [menu, setMenu] = useState<{
     anchor: PopupAnchor;
     model: VoiceModel;
@@ -293,25 +299,32 @@ function ModelsPageImpl({
     if (panelsFor.current !== identity) {
       setIndexItems([]);
       setProfiles([]);
+      setModelVersions(null);
+      setVersionPage(1);
     }
     panelsFor.current = identity;
     if (!m || m.source !== "user_data" || !m.dir || m.missing) {
       setIndexItems([]);
       setProfiles([]);
+      setModelVersions(null);
+      setVersionPage(1);
       return;
     }
     try {
-      const [ix, pr] = await Promise.all([
+      const [ix, pr, mv] = await Promise.all([
         listIndex(m.dir),
         listProfiles(m.dir),
+        listModelVersions(m.dir).catch(() => null),
       ]);
       if (request !== panelRequest.current) return;
       setIndexItems(ix.items || []);
       setProfiles(pr.items || []);
+      setModelVersions(mv);
     } catch {
       if (request !== panelRequest.current) return;
       setIndexItems([]);
       setProfiles([]);
+      setModelVersions(null);
     }
   }, []);
 
@@ -423,6 +436,28 @@ function ModelsPageImpl({
     selected.source === "user_data" &&
     !!selected.dir &&
     !selected.missing;
+  const rvcWeight = modelVersions?.weights?.find((w) => w.kind === "rvc");
+  const rvcVersions = rvcWeight?.versions ?? [];
+  const versionTotalPages = Math.max(1, Math.ceil(rvcVersions.length / VERSION_PAGE_SIZE));
+  const versionPageClamped = Math.min(versionPage, versionTotalPages);
+  const versionPageItems = rvcVersions.slice(
+    (versionPageClamped - 1) * VERSION_PAGE_SIZE,
+    versionPageClamped * VERSION_PAGE_SIZE,
+  );
+
+  const onApplyVersion = async (file: string) => {
+    if (!selected?.dir || applyingVersion) return;
+    setApplyingVersion(file);
+    try {
+      const updated = await applyModelVersion(selected.dir, "rvc", file);
+      setModelVersions(updated);
+      await reload();
+    } catch (e) {
+      setMsg(String(e));
+    } finally {
+      setApplyingVersion("");
+    }
+  };
   const promotable =
     selected &&
     selected.source === "legacy_weights" &&
@@ -777,6 +812,53 @@ function ModelsPageImpl({
           </Group>
         )}
       </Block>
+
+      {manageable && modelVersions?.experiment != null && rvcVersions.length > 0 ? (
+        <Block
+          title={t("s.modelVersionsTitle")}
+          note={
+            rvcWeight?.current.state === "source_removed"
+              ? rvcWeight.current.epoch != null
+                ? t("s.modelVersionsSourceRemoved", { v0: rvcWeight.current.epoch })
+                : t("s.modelVersionsSourceRemovedUnknown")
+              : rvcWeight?.current.state === "external"
+                ? t("s.modelVersionsExternal")
+                : undefined
+          }
+        >
+          <Group>
+            <CatalogTransition scope={`versions:${selected?.dir ?? ""}`} page={versionPageClamped}>
+              {versionPageItems.map((v) => (
+                <ListItem
+                  key={v.file}
+                  title={v.epoch != null ? t("s.modelVersionEpoch", { v0: v.epoch }) : v.is_final ? t("s.modelVersionFinal") : v.file}
+                  desc={v.is_final && v.epoch != null ? t("s.modelVersionFinal") : undefined}
+                  right={
+                    v.current ? (
+                      <Btn on uw disabled>{t("s.e6aa2cbd7b")}</Btn>
+                    ) : (
+                      <Btn
+                        uw
+                        disabled={!!applyingVersion}
+                        busy={applyingVersion === v.file}
+                        onClick={() => void onApplyVersion(v.file)}
+                      >
+                        {t("s.0e2d3a3c09")}
+                      </Btn>
+                    )
+                  }
+                />
+              ))}
+            </CatalogTransition>
+          </Group>
+          <Pager
+            className="pt-2"
+            page={versionPageClamped}
+            pages={versionTotalPages}
+            onChange={setVersionPage}
+          />
+        </Block>
+      ) : null}
 
       <Block
         title={t("s.5ec6f626c3")}

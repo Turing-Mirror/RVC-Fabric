@@ -1527,8 +1527,8 @@
     "stsF0FileClear": "Effacer",
     "trainSaveEvery": "Sauver tous les",
     "trainSaveEveryHint": "Fréquence de sauvegarde de la progression, en époques. Seul le dernier grand point de contrôle est conservé, le disque ne se remplit pas.",
-    "trainSaveWeights": "Exporte à chaque intervalle de sauvegarde un modèle d'inférence léger directement utilisable",
-    "trainSaveWeightsHint": "Activé, vous pouvez écouter les modèles enregistrés en cours d'entraînement sans attendre la fin de toutes les époques.",
+    "trainSaveWeights": "Enregistrer les modèles intermédiaires",
+    "trainSaveWeightsHint": "Conserve un modèle utilisable supplémentaire à chaque intervalle de sauvegarde pour l'écouter pendant l'entraînement et changer d'époque dans la voix une fois terminé.",
     "trainExps": "Cliquez sur une expérience existante pour remplir le nom de la voix",
     "trainSuggested": "Conseillé {v0}",
     "trainGuideTitle": "Entraîner une voix",
@@ -1995,7 +1995,7 @@
     "cleanupSnapshots": "Poids enregistrés par époque",
     "cleanupCheckpoints": "Points de contrôle d'entraînement",
     "cleanupDataset": "Nettoyer les fichiers temporaires du jeu de données (segments découpés et caches de caractéristiques)",
-    "cleanupEffectNone": "Sans conséquence",
+    "cleanupEffectNone": "Impossible de basculer vers ces époques après suppression",
     "cleanupEffectNoResume": "L'entraînement ne pourra plus être repris",
     "cleanupEffectRestart": "Il faudra repartir du prétraitement",
     "cleanupApply": "Effacer la sélection",
@@ -2291,7 +2291,13 @@
     "setupNextStep": "Étape suivante prête ; cliquez pour ouvrir",
     "orbDownloadLabel": "Afficher la progression",
     "communityDownloading": "Téléchargement Communauté",
-    "communityDownloadCount": "{v0} tâches actives"
+    "communityDownloadCount": "{v0} tâches actives",
+    "modelVersionsTitle": "Époques d'entraînement",
+    "modelVersionEpoch": "Époque {v0}",
+    "modelVersionFinal": "Final",
+    "modelVersionsSourceRemoved": "Époque {v0} actuellement utilisée ; le fichier source a été supprimé.",
+    "modelVersionsSourceRemovedUnknown": "Le fichier source de la version actuelle a été supprimé.",
+    "modelVersionsExternal": "Un fichier de modèle externe est actuellement utilisé."
   },
   "extras": {
     "engineTitle": "Ressources moteur",
@@ -2575,5 +2581,11 @@
     "removeDraftConfirm": "Supprimer ce brouillon ?",
     "withdrawConfirm": "Retirer cet envoi ?",
     "saveFailed": "Impossible d’enregistrer le brouillon sur cet appareil."
+  },
+  "modelVersions": {
+    "invalidTarget": "La voix n'existe pas ou ne se trouve pas dans la bibliothèque.",
+    "invalidVersion": "Le modèle de cette époque n'existe pas.",
+    "engineBusy": "Arrêtez la conversion vocale ou l'entraînement avant de changer d'époque.",
+    "installFailed": "Échec du changement de modèle."
   }
 }

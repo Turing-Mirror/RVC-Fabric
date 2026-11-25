@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "./invoke";
 import { t } from "../i18n/t";
 
 /** One feed row. Mirrors `plaza::PlazaItem`. */

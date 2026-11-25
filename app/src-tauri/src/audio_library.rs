@@ -1177,18 +1177,23 @@ pub fn remove_source(root: &Path, source_id: &str) -> Result<(Library, bool), St
 #[tauri::command]
 pub async fn audio_library_get(
     state: State<'_, Mutex<crate::AppState>>,
-) -> Result<Library, String> {
+) -> Result<Library, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = crate::root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || snapshot(&root))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("audio_library_get", error))
 }
 
 #[tauri::command]
 pub async fn audio_library_pick(
     window: tauri::WebviewWindow,
     kind: String,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<String>, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     tauri::async_runtime::spawn_blocking(move || {
         let picker = crate::shell_extras::dialog_on(Some(&window));
         let paths = match kind.as_str() {
@@ -1212,13 +1217,17 @@ pub async fn audio_library_pick(
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("audio_library_pick", error))
 }
 
 #[tauri::command]
 pub async fn audio_library_pick_replacement(
     window: tauri::WebviewWindow,
     kind: String,
-) -> Result<Option<String>, String> {
+) -> Result<Option<String>, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     tauri::async_runtime::spawn_blocking(move || {
         let picker = crate::shell_extras::dialog_on(Some(&window));
         let path = match kind.as_str() {
@@ -1238,6 +1247,9 @@ pub async fn audio_library_pick_replacement(
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("audio_library_pick_replacement", error))
 }
 
 fn notify(app: &AppHandle, library: &Library) {
@@ -1251,7 +1263,8 @@ pub async fn audio_library_import(
     paths: Vec<String>,
     copy: bool,
     recursive: bool,
-) -> Result<Library, String> {
+) -> Result<Library, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = crate::root_clone(&state)?;
     let progress_app = app.clone();
     let library = tauri::async_runtime::spawn_blocking(move || {
@@ -1276,6 +1289,9 @@ pub async fn audio_library_import(
     .map_err(|e| e.to_string())??;
     notify(&app, &library);
     Ok(library)
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("audio_library_import", error))
 }
 
 #[tauri::command]
@@ -1283,7 +1299,8 @@ pub async fn audio_library_refresh(
     app: AppHandle,
     state: State<'_, Mutex<crate::AppState>>,
     source_id: String,
-) -> Result<Library, String> {
+) -> Result<Library, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = crate::root_clone(&state)?;
     let progress_app = app.clone();
     let library = tauri::async_runtime::spawn_blocking(move || {
@@ -1296,6 +1313,9 @@ pub async fn audio_library_refresh(
     .map_err(|e| e.to_string())??;
     notify(&app, &library);
     Ok(library)
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("audio_library_refresh", error))
 }
 
 #[tauri::command]
@@ -1314,7 +1334,8 @@ pub async fn audio_library_relink_source(
     state: State<'_, Mutex<crate::AppState>>,
     source_id: String,
     replacement: String,
-) -> Result<Library, String> {
+) -> Result<Library, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = crate::root_clone(&state)?;
     let progress_app = app.clone();
     let library = tauri::async_runtime::spawn_blocking(move || {
@@ -1333,6 +1354,9 @@ pub async fn audio_library_relink_source(
     .map_err(|e| e.to_string())??;
     notify(&app, &library);
     Ok(library)
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("audio_library_relink_source", error))
 }
 
 #[tauri::command]
@@ -1342,7 +1366,8 @@ pub async fn audio_library_relink_asset(
     asset_id: String,
     replacement: String,
     replace_scanned_duplicate: bool,
-) -> Result<Library, String> {
+) -> Result<Library, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = crate::root_clone(&state)?;
     let library = tauri::async_runtime::spawn_blocking(move || {
         relink_asset(
@@ -1356,6 +1381,9 @@ pub async fn audio_library_relink_asset(
     .map_err(|e| e.to_string())??;
     notify(&app, &library);
     Ok(library)
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("audio_library_relink_asset", error))
 }
 
 #[tauri::command]
@@ -1364,10 +1392,14 @@ pub fn audio_library_set_number(
     state: State<'_, Mutex<crate::AppState>>,
     entry_id: String,
     number: Option<u64>,
-) -> Result<Library, String> {
+) -> Result<Library, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let library = set_number(&crate::root_clone(&state)?, &entry_id, number)?;
     notify(&app, &library);
     Ok(library)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("audio_library_set_number", error))
 }
 
 #[tauri::command]
@@ -1376,10 +1408,14 @@ pub fn audio_library_set_loop(
     state: State<'_, Mutex<crate::AppState>>,
     entry_id: String,
     looped: bool,
-) -> Result<Library, String> {
+) -> Result<Library, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let library = set_loop(&crate::root_clone(&state)?, &entry_id, looped)?;
     notify(&app, &library);
     Ok(library)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("audio_library_set_loop", error))
 }
 
 #[tauri::command]
@@ -1388,10 +1424,14 @@ pub fn audio_library_rename_entry(
     state: State<'_, Mutex<crate::AppState>>,
     entry_id: String,
     name: String,
-) -> Result<Library, String> {
+) -> Result<Library, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let library = rename_entry(&crate::root_clone(&state)?, &entry_id, &name)?;
     notify(&app, &library);
     Ok(library)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("audio_library_rename_entry", error))
 }
 
 #[tauri::command]
@@ -1402,7 +1442,8 @@ pub async fn audio_library_add_clip(
     name: String,
     start: f64,
     end: Option<f64>,
-) -> Result<Library, String> {
+) -> Result<Library, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = crate::root_clone(&state)?;
     let library = tauri::async_runtime::spawn_blocking(move || {
         let asset = snapshot(&root)?
@@ -1418,6 +1459,9 @@ pub async fn audio_library_add_clip(
     .map_err(|e| e.to_string())??;
     notify(&app, &library);
     Ok(library)
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("audio_library_add_clip", error))
 }
 
 #[tauri::command]
@@ -1427,7 +1471,8 @@ pub async fn audio_library_set_range(
     entry_id: String,
     start: f64,
     end: Option<f64>,
-) -> Result<Library, String> {
+) -> Result<Library, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = crate::root_clone(&state)?;
     let library = tauri::async_runtime::spawn_blocking(move || {
         let snapshot = snapshot(&root)?;
@@ -1449,6 +1494,9 @@ pub async fn audio_library_set_range(
     .map_err(|e| e.to_string())??;
     notify(&app, &library);
     Ok(library)
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("audio_library_set_range", error))
 }
 
 #[tauri::command]
@@ -1457,10 +1505,14 @@ pub fn audio_library_exclude(
     state: State<'_, Mutex<crate::AppState>>,
     source_id: String,
     asset_id: String,
-) -> Result<Library, String> {
+) -> Result<Library, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let library = exclude(&crate::root_clone(&state)?, &source_id, &asset_id)?;
     notify(&app, &library);
     Ok(library)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("audio_library_exclude", error))
 }
 
 #[tauri::command]
@@ -1469,13 +1521,17 @@ pub async fn audio_library_restore(
     state: State<'_, Mutex<crate::AppState>>,
     source_id: String,
     path: String,
-) -> Result<Library, String> {
+) -> Result<Library, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = crate::root_clone(&state)?;
     let library = tauri::async_runtime::spawn_blocking(move || restore(&root, &source_id, &path))
         .await
         .map_err(|e| e.to_string())??;
     notify(&app, &library);
     Ok(library)
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("audio_library_restore", error))
 }
 
 #[tauri::command]
@@ -1483,7 +1539,8 @@ pub fn audio_library_remove_source(
     app: AppHandle,
     state: State<'_, Mutex<crate::AppState>>,
     source_id: String,
-) -> Result<Library, String> {
+) -> Result<Library, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let root = crate::root_clone(&state)?;
     let (library, hotkeys_changed) = remove_source(&root, &source_id)?;
     if hotkeys_changed {
@@ -1494,6 +1551,9 @@ pub fn audio_library_remove_source(
     }
     notify(&app, &library);
     Ok(library)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("audio_library_remove_source", error))
 }
 
 #[tauri::command]
@@ -1501,7 +1561,8 @@ pub fn audio_library_grant_asset(
     app: AppHandle,
     state: State<'_, Mutex<crate::AppState>>,
     asset_id: String,
-) -> Result<String, String> {
+) -> Result<String, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let asset = snapshot(&crate::root_clone(&state)?)?
         .assets
         .into_iter()
@@ -1512,6 +1573,9 @@ pub fn audio_library_grant_asset(
     }
     crate::asset_scope::grant_file(&app, &asset.path);
     Ok(asset.path)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("audio_library_grant_asset", error))
 }
 
 #[tauri::command]
@@ -1521,7 +1585,8 @@ pub async fn audio_library_export(
     entry_id: String,
     start: f64,
     end: Option<f64>,
-) -> Result<Option<String>, String> {
+) -> Result<Option<String>, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = crate::root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = ExportGuard::start()?;
@@ -1561,6 +1626,9 @@ pub async fn audio_library_export(
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("audio_library_export", error))
 }
 
 #[tauri::command]

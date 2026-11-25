@@ -1,6 +1,8 @@
+import { ErrorNote } from "../components/ErrorNote";
+import { diagnosticOf, errorSummary, errorWithTitle } from "../lib/diagnostics";
 import { useEffect, useRef, useState } from "react";
 import { usePageLeave } from "trm-ui";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, invokeFor } from "../lib/invoke";
 import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui";
 import { openOverlay, openTool } from "../components/ToolWindow";
 import { QrDialog } from "../components/QrDialog";
@@ -110,7 +112,7 @@ export function MorePage({
     setGpuMsg("");
     void invoke("config_set", { patch: { main_gpu: v } })
       .then(() => setGpuMsg(t("s.9249d39bac")))
-      .catch((e) => setGpuMsg(t("s.e0125710be", { v0: String(e) })));
+      .catch((e) => setGpuMsg(errorWithTitle(e, "s.gpuSaveFailed", "settings")));
   };
 
   // Both of these are 20–40s cold starts (torch/CUDA). Say so on the row
@@ -119,7 +121,8 @@ export function MorePage({
   const openLegacy = async (which: "panel" | "webui") => {
     setLegacyMsg((m) => ({ ...m, [which]: t("s.4fe38132a0") }));
     try {
-      const r = await invoke<{ message?: string; url?: string }>(
+      const r = await invokeFor<{ message?: string; url?: string }>(
+        "enginestart",
         which === "panel" ? "legacy_open_panel" : "legacy_open_webui",
       );
       setLegacyMsg((m) => ({ ...m, [which]: r?.message || t("s.0eeffdd75b") }));
@@ -133,7 +136,7 @@ export function MorePage({
     } catch (e) {
       setLegacyMsg((m) => ({
         ...m,
-        [which]: t("s.ea582ad463", { v0: String(e) }),
+        [which]: errorWithTitle(e, "s.legacyStartFailed", "enginestart"),
       }));
     }
   };
@@ -192,10 +195,12 @@ export function MorePage({
           },
         },
       );
-      const note = out?.perf_note ? `${t("s.clauseSep")}${out.perf_note}` : "";
+      const note = out?.perf_note
+        ? `${t("s.clauseSep")}${diagnosticOf(out.perf_note) ? errorSummary(out.perf_note) : out.perf_note}`
+        : "";
       setBusyMsg(t("s.ae82b8cc23", { v0: out?.path ?? "", v1: note }));
     } catch (e) {
-      setBusyMsg(t("s.7fae0289b6", { v0: String(e) }));
+      setBusyMsg(errorWithTitle(e, "s.diagBuildFailed", "other"));
     }
   };
   // 页面常驻，每次回来副作用都会重新执行：已处理过的请求记下来，不再重复滚动。
@@ -343,21 +348,26 @@ export function MorePage({
           />
           {/* 只有一块 N 卡时不显示：那时候「选哪块」是个假选择。 */}
           {nvGpus.length > 1 ? (
-            <ListItem
-              title={t("s.6b26feecc1")}
-              titleTip={mainGpuTip()}
-              desc={
-                gpuMsg ||
-                t("s.63d89cdb5c")
-              }
-              right={
-                <MainGpuPicker
-                  gpus={nvGpus}
-                  value={mainGpu}
-                  onChange={pickMainGpu}
-                />
-              }
-            />
+            <>
+              <ListItem
+                title={t("s.6b26feecc1")}
+                titleTip={mainGpuTip()}
+                desc={
+                  diagnosticOf(gpuMsg)
+                    ? undefined
+                    : gpuMsg ||
+                      t("s.63d89cdb5c")
+                }
+                right={
+                  <MainGpuPicker
+                    gpus={nvGpus}
+                    value={mainGpu}
+                    onChange={pickMainGpu}
+                  />
+                }
+              />
+              {diagnosticOf(gpuMsg) ? <ErrorNote text={gpuMsg} feature="settings" /> : null}
+            </>
           ) : null}
           <ListItem
             title={t("s.computeBackend")}
@@ -479,7 +489,7 @@ export function MorePage({
           <ListItem
             title={t("s.8b720e5330")}
             desc={
-              busyMsg.startsWith(t("s.8b720e5330"))
+              diagnosticOf(busyMsg) ? undefined : busyMsg.startsWith(t("s.8b720e5330"))
                 ? busyMsg
                 : t("s.df51787548")
             }
@@ -487,6 +497,7 @@ export function MorePage({
               <Btn onClick={() => setDiagOpen(true)}>{t("s.4aa2306395")}</Btn>
             }
           />
+          {diagnosticOf(busyMsg) ? <ErrorNote text={busyMsg} /> : null}
           <ListItem
             title={t("s.a5f158e6bc")}
             right={
@@ -502,16 +513,18 @@ export function MorePage({
           />
           <ListItem
             title={t("s.91e6c9b862")}
-            desc={legacyMsg.panel || t("s.bc94a9c280")}
+            desc={diagnosticOf(legacyMsg.panel) ? undefined : legacyMsg.panel || t("s.bc94a9c280")}
             right={
               <Btn onClick={() => void openLegacy("panel")}>{t("s.65fc81e161")}</Btn>
             }
           />
+          {diagnosticOf(legacyMsg.panel) ? <ErrorNote text={legacyMsg.panel} feature="enginestart" /> : null}
           <ListItem
             title={t("s.a636b86646")}
-            desc={legacyMsg.webui || t("s.bc94a9c280")}
+            desc={diagnosticOf(legacyMsg.webui) ? undefined : legacyMsg.webui || t("s.bc94a9c280")}
             right={<Btn onClick={() => void openLegacy("webui")}>{t("s.65fc81e161")}</Btn>}
           />
+          {diagnosticOf(legacyMsg.webui) ? <ErrorNote text={legacyMsg.webui} feature="enginestart" /> : null}
           {/* 「申请专业优化」暂时隐藏（服务还没开）。 */}
           {SHOW_CONSULT ? (
             <ListItem

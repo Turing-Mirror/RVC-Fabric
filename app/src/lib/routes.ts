@@ -2,7 +2,7 @@
  * 声音通道的识别与虚拟声卡的安装，说明页与新手引导共用。
  */
 import { useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, invokeFor } from "./invoke";
 import { t } from "../i18n/t";
 
 /**
@@ -114,13 +114,13 @@ export function useVbCable() {
           await invoke("assets_ensure_vbcable");
         } catch (e) {
           // 下载失败和安装失败是两回事，报错也得分开说
-          throw new Error(t("s.04c4e3b2b3", { e: String(e) }));
+          throw e;
         }
         await refresh();
       }
       setMsg(t("s.vbcableInstalling"));
       // 静默安装，装完才返回
-      await invoke("assets_install_vbcable");
+      await invokeFor("provision", "assets_install_vbcable");
       setRemoved(false);
       setMsg(t("s.vbcableDone"));
       await refresh();
@@ -137,7 +137,7 @@ export function useVbCable() {
     setMsg("");
     try {
       setMsg(t("s.vbcableUninstalling"));
-      await invoke("assets_uninstall_vbcable");
+      await invokeFor("provision", "assets_uninstall_vbcable");
       setRemoved(true);
       setMsg(t("s.vbcableUninstalled"));
       await refresh();

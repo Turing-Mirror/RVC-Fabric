@@ -1,5 +1,7 @@
+import { ErrorNote } from "./ErrorNote";
+import { diagnosticOf } from "../lib/diagnostics";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../lib/invoke";
 import { Btn } from "./ui";
 import { Field, Toggle } from "./controls";
 import { Select } from "./Select";
@@ -235,7 +237,7 @@ function CableStep({ status }: { status?: Record<string, unknown> }) {
           <Btn primary busy={!!vb.busy} onClick={() => void vb.install()}>
             {vb.busy === "install" ? t("s.1cac8ac7f5") : t("s.b386a7fb53")}
           </Btn>
-          {vb.msg ? <span className="text-[12.5px] text-[var(--help)]">{vb.msg}</span> : null}
+          {diagnosticOf(vb.msg) ? <ErrorNote text={vb.msg} feature="provision" /> : vb.msg ? <span className="text-[12.5px] text-[var(--help)]">{vb.msg}</span> : null}
         </div>
       )}
       <p className="text-[12.5px] text-[var(--meta)] m-0 mt-5 leading-relaxed">{t("s.guide.cable.restart")}</p>

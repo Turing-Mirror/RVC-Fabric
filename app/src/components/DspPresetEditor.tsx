@@ -1,5 +1,7 @@
+import { ErrorNote } from "./ErrorNote";
+import { diagnosticOf } from "../lib/diagnostics";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invokeFor } from "../lib/invoke";
 import { TextInput } from "trm-ui";
 import { RangeBar, SliderValue } from "./controls";
 import { Btn, HelpMark } from "./ui";
@@ -112,7 +114,7 @@ export function DspPresetEditor({
   }, [preset.id, preset.params]);
 
   useEffect(() => {
-    void invoke<Specs>("dsp_effects")
+    void invokeFor<Specs>("settings", "dsp_effects")
       .then(setSpecs)
       .catch(() => setSpecs({ order: [], effects: {} }));
   }, []);
@@ -167,7 +169,7 @@ export function DspPresetEditor({
     }
     setBusy(true);
     try {
-      await invoke("dsp_preset_save", { id, name: saveAs.trim(), params });
+      await invokeFor("settings", "dsp_preset_save", { id, name: saveAs.trim(), params });
       setMsg(t("s.dspSaved", { v0: saveAs.trim() }));
       setSaveAs("");
       onSaved();
@@ -181,7 +183,7 @@ export function DspPresetEditor({
   const remove = async () => {
     setBusy(true);
     try {
-      await invoke("dsp_preset_delete", { id: preset.id });
+      await invokeFor("settings", "dsp_preset_delete", { id: preset.id });
       setMsg("");
       onSaved();
     } catch (e) {
@@ -296,7 +298,7 @@ export function DspPresetEditor({
           {t("s.dspSaveAs")}
         </Btn>
         {msg ? (
-          <span className="text-[12.5px] text-[var(--meta)] truncate">{msg}</span>
+          diagnosticOf(msg) ? <ErrorNote text={msg} feature="settings" /> : <span className="text-[12.5px] text-[var(--meta)] truncate">{msg}</span>
         ) : null}
       </div>
     </div>

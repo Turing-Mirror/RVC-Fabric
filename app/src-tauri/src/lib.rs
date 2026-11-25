@@ -2,6 +2,7 @@
 //!
 //! Stages 1–4: window/UI, worker bridge, Runtime provision, voice catalog & store.
 
+mod diagnostics;
 mod asset_scope;
 mod audio_bus;
 mod audio_edit;
@@ -96,8 +97,12 @@ fn root_clone(state: &State<'_, Mutex<AppState>>) -> Result<PathBuf, String> {
 
 /// engine-core / VB-Cable readiness for the first-run gate.
 #[tauri::command]
-fn assets_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+fn assets_status(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     Ok(engine_assets::assets_status(&root_clone(&state)?))
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("assets_status", error))
 }
 
 /// 下载进度文案用的体积格式（与 provision 侧保持一致）。
@@ -122,7 +127,8 @@ fn fmt_size(n: u64) -> String {
 async fn assets_ensure_engine_core(
     app: AppHandle,
     state: State<'_, Mutex<AppState>>,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     tauri::async_runtime::spawn_blocking(move || {
@@ -154,6 +160,9 @@ async fn assets_ensure_engine_core(
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("assets_ensure_engine_core", error))
 }
 
 /// 补全音频组件（ffmpeg / ffprobe）。安装包不再自带，用户在提示窗里点了
@@ -162,7 +171,8 @@ async fn assets_ensure_engine_core(
 async fn assets_ensure_audio_tools(
     app: AppHandle,
     state: State<'_, Mutex<AppState>>,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     tauri::async_runtime::spawn_blocking(move || {
@@ -177,13 +187,17 @@ async fn assets_ensure_audio_tools(
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("assets_ensure_audio_tools", error))
 }
 
 /// 喂一次心跳给撕裂判定。只可能建议放宽块长（要停流重开，得用户点头）。
 /// 音高算法（rmvpe 等）这里绝不改 —— 欠载误判把用户的 rmvpe 改成 fcpe
 /// 比漏降一档更糟。
 #[tauri::command]
-fn tearing_step(state: State<'_, Mutex<AppState>>, underrun: u32) -> Result<Value, String> {
+fn tearing_step(state: State<'_, Mutex<AppState>>, underrun: u32) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let root = root_clone(&state)?;
     let cfg = config::read(&root);
     let f0 = cfg
@@ -209,6 +223,9 @@ fn tearing_step(state: State<'_, Mutex<AppState>>, underrun: u32) -> Result<Valu
             }))
         }
     }
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("tearing_step", error))
 }
 
 /// 起播时清掉判定窗口。
@@ -228,7 +245,8 @@ fn vcredist_installed() -> bool {
 async fn assets_ensure_vcredist(
     app: AppHandle,
     state: State<'_, Mutex<AppState>>,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     tauri::async_runtime::spawn_blocking(move || {
@@ -260,17 +278,24 @@ async fn assets_ensure_vcredist(
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("assets_ensure_vcredist", error))
 }
 
 /// 静默安装 VC++ 运行库。要 UAC，用户点了才走到这里。
 #[tauri::command]
-async fn vcredist_install(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn vcredist_install(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || {
         vcredist::install(&root).map(|m| json!({"ok": true, "message": m}))
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("vcredist_install", error))
 }
 
 /// 补全 VB-Cable 安装包。进度同样走 `provision-progress`（phase=vbcable）。
@@ -278,7 +303,8 @@ async fn vcredist_install(state: State<'_, Mutex<AppState>>) -> Result<Value, St
 async fn assets_ensure_vbcable(
     app: AppHandle,
     state: State<'_, Mutex<AppState>>,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     tauri::async_runtime::spawn_blocking(move || {
@@ -310,35 +336,47 @@ async fn assets_ensure_vbcable(
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("assets_ensure_vbcable", error))
 }
 
 /// 静默安装虚拟声卡。装驱动能跑十几秒，同步命令会把界面卡死，所以丢到
 /// 阻塞线程池里等。
 #[tauri::command]
-async fn assets_install_vbcable(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn assets_install_vbcable(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || {
         engine_assets::install_vbcable(&root).map(|_| json!({"ok": true}))
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("assets_install_vbcable", error))
 }
 
 /// 静默卸载虚拟声卡。优先跑 Program Files 里那份官方卸载程序（和系统
 /// 「应用和功能」同一条），没有再退回软件下的安装包。
 #[tauri::command]
-async fn assets_uninstall_vbcable(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn assets_uninstall_vbcable(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || {
         engine_assets::uninstall_vbcable(&root).map(|_| json!({"ok": true}))
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("assets_uninstall_vbcable", error))
 }
 
 /// Full effective settings (defaults overlaid with saved values).
 #[tauri::command]
-fn config_get(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+fn config_get(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let mut cfg = config::read(&root_clone(&state)?);
     // 「这一次该走 DSP 还是 RVC」由 `config::wants_dsp` 一家说了算，前端不要
     // 自己再推一遍。以前 useEngine 里是「dsp_enabled 或 有预设」，比 wants_dsp
@@ -348,16 +386,23 @@ fn config_get(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
     let dsp = config::wants_dsp(&cfg);
     cfg.insert("dsp_active".into(), json!(dsp));
     Ok(Value::Object(cfg))
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("config_get", error))
 }
 
 /// Switch shell locale (tray / status message_code). Frontend keeps its own pack.
 #[tauri::command]
-fn i18n_set_locale(locale: String) -> Result<Value, String> {
+fn i18n_set_locale(locale: String) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     if !i18n::supported(&locale) {
         return Err(format!("unsupported locale: {locale}"));
     }
     i18n::set_locale(&locale);
     Ok(json!({"ok": true, "locale": locale}))
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("i18n_set_locale", error))
 }
 
 #[tauri::command]
@@ -378,7 +423,8 @@ async fn config_set(
     app: AppHandle,
     state: State<'_, Mutex<AppState>>,
     patch: Map<String, Value>,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     // set_hot 派发要等上一条命令被认领（上限 CMD_ACK_TIMEOUT_MS），同步命令
     // 会让这段等待落在 IPC 线程上 —— 拖一次滑条窗口就冻结几秒（R01）。
@@ -444,6 +490,9 @@ async fn config_set(
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("config_set", error))
 }
 
 /// 开机自启状态（读 HKCU Run 键）。状态以注册表为准，不走 app_config：
@@ -454,8 +503,12 @@ fn autostart_get() -> autostart::AutostartStatus {
 }
 
 #[tauri::command]
-fn autostart_set(enabled: bool) -> Result<(), String> {
+fn autostart_set(enabled: bool) -> Result<(), crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     autostart::set(enabled)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("autostart_set", error))
 }
 
 /// 封面批量本地化（商店 / 模型页 / 首页共用）。返回 url → 本地缓存路径；
@@ -464,13 +517,17 @@ fn autostart_set(enabled: bool) -> Result<(), String> {
 async fn cover_resolve_many(
     state: State<'_, Mutex<AppState>>,
     urls: Vec<String>,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || {
         Ok::<Value, String>(Value::Object(store::resolve_covers(&root, &urls)))
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("cover_resolve_many", error))
 }
 
 /// Native image picker for the wallpaper setting. Returns the chosen path or
@@ -496,10 +553,14 @@ fn pick_wallpaper(window: tauri::WebviewWindow) -> Option<String> {
 
 /// Ask the catalog whether a newer build exists.
 #[tauri::command]
-async fn update_check() -> Result<Value, String> {
+async fn update_check() -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     tauri::async_runtime::spawn_blocking(|| update::check(12))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("update_check", error))
 }
 
 /// Download a gui_patch and swap the external frontend/ directory.
@@ -508,7 +569,8 @@ async fn update_apply(
     state: State<'_, Mutex<AppState>>,
     url: String,
     sha256: String,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     tauri::async_runtime::spawn_blocking(move || {
@@ -517,6 +579,9 @@ async fn update_apply(
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("update_apply", error))
 }
 
 /// Register / unregister the global hotkeys.
@@ -537,7 +602,8 @@ fn legacy_hotkey_set(
     app: AppHandle,
     state: State<'_, Mutex<AppState>>,
     patch: Map<String, Value>,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let legacy = &hotkey_catalog::catalog().legacy;
     let touched: Vec<&str> = patch
         .keys()
@@ -599,23 +665,38 @@ fn legacy_hotkey_set(
     let _ = app.emit("config-changed", &changed);
     let _ = app.emit("hotkeys://changed", ());
     Ok(result)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("legacy_hotkey_set", error))
 }
 
 #[tauri::command]
-fn legacy_hotkeys_status(app: AppHandle) -> Result<Vec<Value>, String> {
+fn legacy_hotkeys_status(app: AppHandle) -> Result<Vec<Value>, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     shell_extras::legacy_hotkey_status(&app)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("legacy_hotkeys_status", error))
 }
 
 #[tauri::command]
 fn audio_hotkeys_get(
     state: State<'_, Mutex<AppState>>,
-) -> Result<Vec<hotkey_catalog::AudioBinding>, String> {
+) -> Result<Vec<hotkey_catalog::AudioBinding>, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     hotkey_catalog::read_bindings(&root_clone(&state)?)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("audio_hotkeys_get", error))
 }
 
 #[tauri::command]
-fn audio_hotkeys_status(app: AppHandle) -> Result<Vec<Value>, String> {
+fn audio_hotkeys_status(app: AppHandle) -> Result<Vec<Value>, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     shell_extras::audio_hotkey_status(&app)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("audio_hotkeys_status", error))
 }
 
 #[tauri::command]
@@ -623,7 +704,8 @@ fn audio_hotkeys_set(
     app: AppHandle,
     state: State<'_, Mutex<AppState>>,
     bindings: Vec<hotkey_catalog::AudioBinding>,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let _hotkey_guard = hotkey_catalog::WRITE_LOCK
         .lock()
         .unwrap_or_else(|e| e.into_inner());
@@ -660,6 +742,9 @@ fn audio_hotkeys_set(
     let _ = app.emit("config-changed", &changed);
     let _ = app.emit("hotkeys://changed", ());
     Ok(result)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("audio_hotkeys_set", error))
 }
 
 #[tauri::command]
@@ -667,7 +752,8 @@ fn audio_hotkey_run(
     app: AppHandle,
     state: State<'_, Mutex<AppState>>,
     binding_id: String,
-) -> Result<(), String> {
+) -> Result<(), crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let root = root_clone(&state)?;
     let config = config::read(&root);
     if !config
@@ -688,6 +774,9 @@ fn audio_hotkey_run(
         return Err("audio_hotkey_disabled".into());
     }
     shell_extras::run_audio_binding(&app, binding)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("audio_hotkey_run", error))
 }
 
 /// 出包之前，把这个包里已经能看出来的问题先摆给用户看。
@@ -695,11 +784,15 @@ fn audio_hotkey_run(
 /// 支援收到的包里，相当一部分结论用户自己就能得出（选错模型、数据集没读进去、
 /// 上次训练是被显存不足带走的）。这条命令只读盘，不改任何东西。
 #[tauri::command]
-async fn diagnostics_self_check(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn diagnostics_self_check(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || json!(selfcheck::run(&root)))
         .await
         .map_err(|e| e.to_string())
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("diagnostics_self_check", error))
 }
 
 /// 数据集抽样体检：总时长估计、采样率与声道分布。拿不到 ffprobe 就返回
@@ -708,22 +801,30 @@ async fn diagnostics_self_check(state: State<'_, Mutex<AppState>>) -> Result<Val
 async fn train_inspect_dataset(
     state: State<'_, Mutex<AppState>>,
     path: String,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || {
         train::inspect_dataset(&root, std::path::Path::new(&path))
     })
     .await
     .map_err(|e| e.to_string())
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("train_inspect_dataset", error))
 }
 
 /// 每个实验、每一类可清理的产物各占多少。只扫不删。
 #[tauri::command]
-async fn train_cleanup_scan(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn train_cleanup_scan(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || train::cleanup_scan(&root))
         .await
         .map_err(|e| e.to_string())
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("train_cleanup_scan", error))
 }
 
 /// 删掉指定实验的指定几类。类别必须明确勾选，没有「一键清理全部」。
@@ -732,7 +833,8 @@ async fn train_cleanup_apply(
     state: State<'_, Mutex<AppState>>,
     exp: String,
     kinds: Vec<String>,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || {
         train::cleanup_apply(&root, &exp, &kinds).map(|freed| {
@@ -744,15 +846,22 @@ async fn train_cleanup_apply(
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("train_cleanup_apply", error))
 }
 
 /// 各个目录各占多少磁盘。
 #[tauri::command]
-async fn storage_usage(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn storage_usage(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || shell_extras::storage_usage(&root))
         .await
         .map_err(|e| e.to_string())
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("storage_usage", error))
 }
 
 /// 清空一个实验的中间产物（切片 / 音高 / 特征），返回释放的字节数。
@@ -762,7 +871,8 @@ async fn storage_usage(state: State<'_, Mutex<AppState>>) -> Result<Value, Strin
 async fn train_reset_stages(
     state: State<'_, Mutex<AppState>>,
     exp: String,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || {
         train::reset_stages(&root, &exp).map(|freed| {
@@ -774,44 +884,67 @@ async fn train_reset_stages(
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("train_reset_stages", error))
 }
 
 /// 选完数据集立刻数一遍：这个目录里到底有几个音频。
 #[tauri::command]
-async fn train_scan_dataset(path: String) -> Result<Value, String> {
+async fn train_scan_dataset(path: String) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     tauri::async_runtime::spawn_blocking(move || train::scan_dataset(std::path::Path::new(&path)))
         .await
         .map_err(|e| e.to_string())
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("train_scan_dataset", error))
 }
 
 /// 这台机器踩到哪些我们已经知道的坑。开机后台校验一次，命中就在底栏上方提示。
 #[tauri::command]
-async fn known_issues_check(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn known_issues_check(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || json!(known_issues::hits(&root)))
         .await
         .map_err(|e| e.to_string())
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("known_issues_check", error))
 }
 
 /// 一段可以直接粘进群里的环境信息。
 #[tauri::command]
-async fn diagnostics_summary_text(state: State<'_, Mutex<AppState>>) -> Result<String, String> {
+async fn diagnostics_summary_text(state: State<'_, Mutex<AppState>>) -> Result<String, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || shell_extras::summary_text(&root))
         .await
         .map_err(|e| e.to_string())
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("diagnostics_summary_text", error))
 }
 
 /// 链路自检：读事实不出结论，毫秒级（见 link_check.rs）。
 #[tauri::command(async)]
-fn link_check(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+fn link_check(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     Ok(link_check::gather(&root_clone(&state)?))
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("link_check", error))
 }
 
 /// 新手进度的五步状态（见 link_check.rs 的 onboarding）。
 #[tauri::command(async)]
-fn onboarding_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+fn onboarding_status(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     Ok(link_check::onboarding(&root_clone(&state)?))
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("onboarding_status", error))
 }
 
 /// 打开 Windows 声音设置页。方案串是写死的系统值，不收任何外部输入。
@@ -819,7 +952,8 @@ fn onboarding_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String>
 /// 产品只出 Windows，但仓库要能在 macOS / Linux 上编过 —— 测试和 CI 都在
 /// 那边跑。没有 cfg 门的话 `std::os::windows` 直接让整个 crate 编不过。
 #[tauri::command]
-fn open_sound_settings() -> Result<(), String> {
+fn open_sound_settings() -> Result<(), crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -834,6 +968,9 @@ fn open_sound_settings() -> Result<(), String> {
     {
         Err("only on Windows".into())
     }
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("open_sound_settings", error))
 }
 
 /// 出包之前，把包里会有哪些文件、各自多大摆出来。
@@ -841,11 +978,15 @@ fn open_sound_settings() -> Result<(), String> {
 /// 用户是拿这个包去群里求助的。「里面只有日志和配置」是一句承诺，这份清单是
 /// 这句承诺的凭据。
 #[tauri::command]
-async fn diagnostics_preview(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn diagnostics_preview(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || shell_extras::diagnostics_preview(&root))
         .await
         .map_err(|e| e.to_string())
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("diagnostics_preview", error))
 }
 
 /// Zip logs + machine info + settings for support.
@@ -858,7 +999,8 @@ async fn diagnostics_build(
     state: State<'_, Mutex<AppState>>,
     with_perf: bool,
     report: Option<shell_extras::UserReport>,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     let report = report.unwrap_or_default();
     tauri::async_runtime::spawn_blocking(move || {
@@ -873,12 +1015,19 @@ async fn diagnostics_build(
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("diagnostics_build", error))
 }
 
 /// 朗读稿 + 现在录到什么程度了。界面照着它画。
 #[tauri::command]
-fn consult_state(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+fn consult_state(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     Ok(consult::state(&root_clone(&state)?))
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("consult_state", error))
 }
 
 /// 开始录一种语言的原声。语言只认 zh / en / ja。
@@ -887,11 +1036,15 @@ async fn consult_record_start(
     app: AppHandle,
     state: State<'_, Mutex<AppState>>,
     lang: String,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || consult::record_start(&app, &root, &lang))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("consult_record_start", error))
 }
 
 /// 停止录音。和语音转换那边共用同一个录音器，所以直接借它的停。
@@ -902,10 +1055,14 @@ fn consult_record_stop() {
 
 /// 把录好的全删掉，重来一次。
 #[tauri::command]
-fn consult_clear(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+fn consult_clear(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let root = root_clone(&state)?;
     consult::clear(&root);
     Ok(consult::state(&root))
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("consult_clear", error))
 }
 
 /// 出包：把每种语言的原声用当前参数转一遍，连同性能记录一起打成 zip。
@@ -916,7 +1073,8 @@ async fn consult_build(
     app: AppHandle,
     state: State<'_, Mutex<AppState>>,
     note: String,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || {
         consult::build(&app, &root, &note).map(|(p, missing)| {
@@ -926,6 +1084,9 @@ async fn consult_build(
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("consult_build", error))
 }
 
 /// More page: how much regenerable cache is sitting on disk.
@@ -933,20 +1094,25 @@ async fn consult_build(
 /// `(async)`: footprint 递归走 TEMP 与诊断目录，文件多时上百毫秒。同步命令
 /// 跑在主线程上，「其他」页每次进存储区都会顿一下；挪到线程池只是加个词。
 #[tauri::command(async)]
-fn cache_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+fn cache_status(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let root = root_clone(&state)?;
     let bytes = paths::cache_footprint(&root);
     Ok(json!({
         "bytes": bytes,
         "mb": format!("{:.1}", bytes as f64 / (1024.0 * 1024.0)),
     }))
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("cache_status", error))
 }
 
 /// More page: wipe logs + TEMP + leftover downloads. Confirm in the UI first.
 ///
 /// `(async)` 同上：删除是成片的文件操作，不该占着主线程。
 #[tauri::command(async)]
-fn cache_clear(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+fn cache_clear(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let root = root_clone(&state)?;
     let stats = paths::clear_user_cache(&root);
     paths::log_clean_stats(&crate::i18n::t("s.cacheClear"), &root, &stats);
@@ -958,6 +1124,9 @@ fn cache_clear(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
         "freed_bytes": stats.freed_bytes,
         "freed_mb": format!("{:.1}", stats.freed_bytes as f64 / (1024.0 * 1024.0)),
     }))
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("cache_clear", error))
 }
 
 /// 存储页按类别清理：临时文件、软件日志、诊断包、性能报告、音色回收站。
@@ -966,7 +1135,8 @@ fn cache_clear(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
 async fn storage_clean(
     state: State<'_, Mutex<AppState>>,
     kinds: Vec<String>,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || {
         let stats = paths::storage_clean(&root, &kinds)?;
@@ -975,20 +1145,28 @@ async fn storage_clean(
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("storage_clean", error))
 }
 
 /// Open a folder under User_Data in the file manager.
 #[tauri::command]
-fn reveal_user_dir(state: State<'_, Mutex<AppState>>, name: String) -> Result<(), String> {
+fn reveal_user_dir(state: State<'_, Mutex<AppState>>, name: String) -> Result<(), crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let root = root_clone(&state)?;
     let dir = paths::user_data(&root).join(name);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     shell_extras::reveal(&dir.join("x"))
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("reveal_user_dir", error))
 }
 
 /// Opt-in daily ping. No-op when the user has not agreed.
 #[tauri::command]
-async fn telemetry_tick(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn telemetry_tick(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     let accel = provision::read_package_meta_variant(&root).unwrap_or_else(|| "unknown".into());
     tauri::async_runtime::spawn_blocking(move || {
@@ -996,6 +1174,9 @@ async fn telemetry_tick(state: State<'_, Mutex<AppState>>) -> Result<Value, Stri
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("telemetry_tick", error))
 }
 
 /// The UI answered the close prompt.
@@ -1006,8 +1187,12 @@ fn close_finish(app: AppHandle, to_tray: bool) {
 
 /// Strategy B: replace the exe through the signed updater feed.
 #[tauri::command]
-async fn update_app(app: AppHandle) -> Result<Value, String> {
+async fn update_app(app: AppHandle) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     update::run_app_updater(&app).await
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("update_app", error))
 }
 
 /// 打开一个独立工具窗口（人声分离 / 训练音色 / 语音转换）。
@@ -1018,15 +1203,23 @@ async fn update_app(app: AppHandle) -> Result<Value, String> {
 /// 之后所有命令全部挂起（wry#583 同款死锁）。改成 async 后命令体跑在
 /// tokio 线程上，建窗经事件循环顶层派发，回调能正常送达。
 #[tauri::command]
-async fn tools_open(app: AppHandle, kind: String) -> Result<(), String> {
+async fn tools_open(app: AppHandle, kind: String) -> Result<(), crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     tool_window::open(&app, &kind)
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("tools_open", error))
 }
 
 #[tauri::command]
-async fn overlay_audio_layout(window: tauri::WebviewWindow, active: bool) -> Result<(), String> {
+async fn overlay_audio_layout(window: tauri::WebviewWindow, active: bool) -> Result<(), crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     tauri::async_runtime::spawn_blocking(move || tool_window::resize_overlay(&window, active))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("overlay_audio_layout", error))
 }
 
 /// Shipping version. The 「其他」page had this typed in as a literal, so it
@@ -1080,7 +1273,8 @@ fn ui_log(line: String) {
 /// cards and a stale 1.2.4 changelog while the parser, the cnb.cool image
 /// restriction and the placement rules all sat unused.
 #[tauri::command]
-async fn plaza_fetch(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn plaza_fetch(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || {
         let (items, changelog, errors) = plaza::fetch(12);
@@ -1120,24 +1314,36 @@ async fn plaza_fetch(state: State<'_, Mutex<AppState>>) -> Result<Value, String>
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("plaza_fetch", error))
 }
 
 /// The user opened the plaza — clear the tab dot up to `newest`.
 #[tauri::command]
-fn plaza_mark_seen(state: State<'_, Mutex<AppState>>, newest: String) -> Result<(), String> {
+fn plaza_mark_seen(state: State<'_, Mutex<AppState>>, newest: String) -> Result<(), crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     config::set_plaza_seen(&root_clone(&state)?, &newest)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("plaza_mark_seen", error))
 }
 
 /// Remember a dismissed models-page banner so it stays gone across restarts.
 #[tauri::command]
-fn plaza_dismiss(state: State<'_, Mutex<AppState>>, id: String) -> Result<(), String> {
+fn plaza_dismiss(state: State<'_, Mutex<AppState>>, id: String) -> Result<(), crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     config::dismiss_ad(&root_clone(&state)?, &id)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("plaza_dismiss", error))
 }
 
 /// Open a link in the user's own browser. Restricted to http/https so a feed
 /// can never hand us a `file://` or a shell scheme to launch.
 #[tauri::command]
-fn open_external(app: AppHandle, url: String) -> Result<(), String> {
+fn open_external(app: AppHandle, url: String) -> Result<(), crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let ok = url.starts_with("https://") || url.starts_with("http://");
     if !ok {
         return Err(crate::i18n::t("s.88d3b1cad9").into());
@@ -1146,24 +1352,35 @@ fn open_external(app: AppHandle, url: String) -> Result<(), String> {
     app.opener()
         .open_url(url, None::<&str>)
         .map_err(|e| e.to_string())
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("open_external", error))
 }
 
 /// 「其他」page → 打开原版实时面板（gui_v1）。
 #[tauri::command]
-async fn legacy_open_panel(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn legacy_open_panel(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || legacy::open_realtime_panel(&root))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("legacy_open_panel", error))
 }
 
 /// 「其他」page → 打开原版 WebUI（infer-web.py）。
 #[tauri::command]
-async fn legacy_open_webui(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn legacy_open_webui(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || legacy::open_webui(&root))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("legacy_open_webui", error))
 }
 
 /// Path of the shell log, for the 「其他」page's "打开日志" action.
@@ -1173,12 +1390,17 @@ fn log_path() -> Option<String> {
 }
 
 #[tauri::command]
-fn product_root(state: State<'_, Mutex<AppState>>) -> Result<String, String> {
+fn product_root(state: State<'_, Mutex<AppState>>) -> Result<String, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     Ok(root_clone(&state)?.to_string_lossy().into_owned())
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("product_root", error))
 }
 
 #[tauri::command]
-fn engine_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+fn engine_status(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let root = root_clone(&state)?;
     let mut status = worker::status_for_ui(&root);
     if audio_voice::microphone_failed() {
@@ -1187,10 +1409,15 @@ fn engine_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
         }
     }
     Ok(status)
+
+    })();
+    result.map(|value| crate::diagnostics::status(value, crate::diagnostics::command_feature("engine_status")))
+        .map_err(|error| crate::diagnostics::command_error("engine_status", error))
 }
 
 #[tauri::command]
-async fn engine_ensure(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn engine_ensure(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     if !paths::runtime_ready(&root) {
         let mut st = worker::status_for_ui(&root);
@@ -1213,10 +1440,15 @@ async fn engine_ensure(state: State<'_, Mutex<AppState>>) -> Result<Value, Strin
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map(|value| crate::diagnostics::status(value, crate::diagnostics::command_feature("engine_ensure")))
+        .map_err(|error| crate::diagnostics::command_error("engine_ensure", error))
 }
 
 #[tauri::command]
-async fn engine_start_worker(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn engine_start_worker(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     if !paths::runtime_ready(&root) {
         return Ok(json!({"state": "error", "error": crate::i18n::t("s.a36cb645c2"), "pid": 0}));
@@ -1229,10 +1461,15 @@ async fn engine_start_worker(state: State<'_, Mutex<AppState>>) -> Result<Value,
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map(|value| crate::diagnostics::status(value, crate::diagnostics::command_feature("engine_start_worker")))
+        .map_err(|error| crate::diagnostics::command_error("engine_start_worker", error))
 }
 
 #[tauri::command]
-async fn engine_start_vc(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn engine_start_vc(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     if !paths::runtime_ready(&root) {
         return Ok(json!({"state": "error", "error": crate::i18n::t("s.45309ba4c5"), "pid": 0}));
@@ -1287,13 +1524,18 @@ async fn engine_start_vc(state: State<'_, Mutex<AppState>>) -> Result<Value, Str
     .map_err(|e| e.to_string())?;
     if is_mobile && result.as_ref().map_or(true, |st| st["state"] != "running") { mobile::stop_audio(); }
     result
+
+    }.await;
+    result.map(|value| crate::diagnostics::status(value, crate::diagnostics::command_feature("engine_start_vc")))
+        .map_err(|error| crate::diagnostics::command_error("engine_start_vc", error))
 }
 
 #[tauri::command]
 async fn engine_stop_vc(
     state: State<'_, Mutex<AppState>>,
     force: Option<bool>,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     mobile::stop_audio();
     let f = force.unwrap_or(false);
@@ -1303,11 +1545,19 @@ async fn engine_stop_vc(
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map(|value| crate::diagnostics::status(value, crate::diagnostics::command_feature("engine_stop_vc")))
+        .map_err(|error| crate::diagnostics::command_error("engine_stop_vc", error))
 }
 
 #[tauri::command]
-fn separate_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+fn separate_status(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     Ok(separate::status(&root_clone(&state)?))
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("separate_status", error))
 }
 
 /// 选音频文件 / 选输出目录。原生对话框要主线程，所以留在同步命令里 ——
@@ -1351,7 +1601,8 @@ async fn separate_start(
     model: String,
     format: Option<String>,
     aggression: Option<u32>,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     let format = format.unwrap_or_else(|| "wav".into());
     let aggression = aggression.unwrap_or(10).min(20);
@@ -1361,6 +1612,9 @@ async fn separate_start(
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("separate_start", error))
 }
 
 #[tauri::command]
@@ -1369,7 +1623,8 @@ fn separate_cancel() {
 }
 
 #[tauri::command]
-fn separate_reveal(path: String) -> Result<(), String> {
+fn separate_reveal(path: String) -> Result<(), crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let p = std::path::PathBuf::from(path.trim());
     if p.is_file() {
         return crate::shell_extras::reveal(&p);
@@ -1378,6 +1633,9 @@ fn separate_reveal(path: String) -> Result<(), String> {
         return crate::shell_extras::reveal(&p.join("x"));
     }
     Ok(())
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("separate_reveal", error))
 }
 
 // --- 离线语音转换 STS（音频 → 目标音色）------------------------------------
@@ -1388,23 +1646,35 @@ fn tools_open_downloads(
     app: AppHandle,
     reason: Option<String>,
     filter: Option<String>,
-) -> Result<(), String> {
+) -> Result<(), crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     tool_window::focus_main_downloads(
         &app,
         reason.as_deref().unwrap_or(""),
         filter.as_deref().unwrap_or(""),
     )
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("tools_open_downloads", error))
 }
 
 /// 工具窗口点「查看说明」：主窗口跳到说明页对应段。
 #[tauri::command]
-fn tools_open_help(app: AppHandle, section: Option<String>) -> Result<(), String> {
+fn tools_open_help(app: AppHandle, section: Option<String>) -> Result<(), crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     tool_window::focus_main_help(&app, section.as_deref().unwrap_or("train"))
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("tools_open_help", error))
 }
 
 #[tauri::command]
-fn tools_open_audio(app: AppHandle) -> Result<(), String> {
+fn tools_open_audio(app: AppHandle) -> Result<(), crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     tool_window::focus_main_audio(&app)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("tools_open_audio", error))
 }
 
 /// DSP 变声预设：内置 + 用户自存，同 id 用户覆盖内置。
@@ -1413,7 +1683,8 @@ async fn dsp_activate(
     app: AppHandle,
     state: State<'_, Mutex<AppState>>,
     id: String,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     // activate 里可能换 worker、派发 set 命令（带认领等待）—— 移出 IPC 线程。
     tauri::async_runtime::spawn_blocking(move || {
@@ -1434,13 +1705,17 @@ async fn dsp_activate(
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("dsp_activate", error))
 }
 
 #[tauri::command]
 async fn dsp_deactivate(
     app: AppHandle,
     state: State<'_, Mutex<AppState>>,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || {
         let out = dsp::deactivate(&root)?;
@@ -1449,23 +1724,34 @@ async fn dsp_deactivate(
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("dsp_deactivate", error))
 }
 
 #[tauri::command]
-async fn dsp_presets(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn dsp_presets(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || Ok(dsp::list(&root)))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("dsp_presets", error))
 }
 
 /// DSP 效果器规格。前端画滑条要用，范围只有引擎侧一份定义。
 #[tauri::command]
-async fn dsp_effects(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn dsp_effects(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || Ok(dsp::effect_specs(&root)))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("dsp_effects", error))
 }
 
 #[tauri::command]
@@ -1474,27 +1760,39 @@ async fn dsp_preset_save(
     id: String,
     name: String,
     params: Value,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || dsp::save(&root, &id, &name, &params))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("dsp_preset_save", error))
 }
 
 #[tauri::command]
-async fn dsp_preset_delete(state: State<'_, Mutex<AppState>>, id: String) -> Result<Value, String> {
+async fn dsp_preset_delete(state: State<'_, Mutex<AppState>>, id: String) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || dsp::delete(&root, &id))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("dsp_preset_delete", error))
 }
 
 #[tauri::command]
-async fn sts_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn sts_status(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || Ok(sts::status(&root)))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("sts_status", error))
 }
 
 #[tauri::command]
@@ -1523,11 +1821,15 @@ fn sts_pick_output(
 }
 
 #[tauri::command]
-async fn sts_list_input(state: State<'_, Mutex<AppState>>, input: String) -> Result<Value, String> {
+async fn sts_list_input(state: State<'_, Mutex<AppState>>, input: String) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || Ok(sts::list_input(&root, &input)))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("sts_list_input", error))
 }
 
 #[tauri::command]
@@ -1535,8 +1837,12 @@ fn sts_delete_input(
     state: State<'_, Mutex<AppState>>,
     input: String,
     path: String,
-) -> Result<(), String> {
+) -> Result<(), crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     sts::delete_input_file(&root_clone(&state)?, &input, &path)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("sts_delete_input", error))
 }
 
 #[tauri::command]
@@ -1545,13 +1851,21 @@ fn sts_rename_input(
     input: String,
     path: String,
     new_name: String,
-) -> Result<String, String> {
+) -> Result<String, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     sts::rename_input_file(&root_clone(&state)?, &input, &path, &new_name)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("sts_rename_input", error))
 }
 
 #[tauri::command]
-fn sts_reveal_input(path: String) -> Result<(), String> {
+fn sts_reveal_input(path: String) -> Result<(), crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     sts::reveal_path(&path)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("sts_reveal_input", error))
 }
 
 /// 安装位置是不是机械硬盘。底栏开启变声慢时据此提示。
@@ -1573,12 +1887,16 @@ fn sts_pick_record_dir(
 }
 
 #[tauri::command]
-fn sts_default_input(state: State<'_, Mutex<AppState>>) -> Result<String, String> {
+fn sts_default_input(state: State<'_, Mutex<AppState>>) -> Result<String, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let root = root_clone(&state)?;
     let dir = sts::record_dir(&root);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     sts::remember_input(&root, &dir.to_string_lossy());
     Ok(dir.to_string_lossy().into_owned())
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("sts_default_input", error))
 }
 
 #[tauri::command]
@@ -1586,11 +1904,15 @@ async fn sts_record_start(
     app: AppHandle,
     state: State<'_, Mutex<AppState>>,
     input: String,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || sts::record(&app, &root, &input))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("sts_record_start", error))
 }
 
 #[tauri::command]
@@ -1603,11 +1925,15 @@ fn sts_record_stop() {
 async fn mic_test_start(
     app: AppHandle,
     state: State<'_, Mutex<AppState>>,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || mic::test(&app, &root))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("mic_test_start", error))
 }
 
 #[tauri::command]
@@ -1642,7 +1968,8 @@ async fn sts_start(
     owner: Option<String>,
     // 冻结快照时的 excluded 计数，仅落运行日志 header，不参与执行。
     excluded: Option<u64>,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     let model_path = model_path.unwrap_or_default();
     let index_path = index_path.unwrap_or_default();
@@ -1674,6 +2001,9 @@ async fn sts_start(
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("sts_start", error))
 }
 
 #[tauri::command]
@@ -1684,16 +2014,21 @@ fn sts_cancel(owner: Option<String>) {
 }
 
 #[tauri::command]
-fn sts_reveal(state: State<'_, Mutex<AppState>>, path: Option<String>) -> Result<(), String> {
+fn sts_reveal(state: State<'_, Mutex<AppState>>, path: Option<String>) -> Result<(), crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let root = root_clone(&state)?;
     sts::reveal_output(&root, path.as_deref().unwrap_or(""))
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("sts_reveal", error))
 }
 
 #[tauri::command]
 async fn sts_sources_scan(
     state: State<'_, Mutex<AppState>>,
     output: Option<String>,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     // 代次在调用线程领取：scan_with_gen 途中被 sts_sources_scan_cancel 作废
     // 时提前返回 {"cancelled": true}，前端据此丢弃过期结果。
@@ -1707,6 +2042,9 @@ async fn sts_sources_scan(
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("sts_sources_scan", error))
 }
 
 #[tauri::command]
@@ -1717,22 +2055,30 @@ fn sts_sources_scan_cancel() {
 // 下面这些改的是真实目录/文件系统，磁盘慢的机器上会把 IPC 线程卡住——
 // 统一 spawn_blocking。服务层内部已用 STATE 锁串行化，签名不变。
 #[tauri::command]
-async fn sts_sources_add(state: State<'_, Mutex<AppState>>, path: String) -> Result<Value, String> {
+async fn sts_sources_add(state: State<'_, Mutex<AppState>>, path: String) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || sts_sources::add(&root, &path))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("sts_sources_add", error))
 }
 
 #[tauri::command]
 async fn sts_sources_remove(
     state: State<'_, Mutex<AppState>>,
     id: String,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || sts_sources::remove(&root, &id))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("sts_sources_remove", error))
 }
 
 #[tauri::command]
@@ -1740,49 +2086,69 @@ async fn sts_sources_set_recursive(
     state: State<'_, Mutex<AppState>>,
     id: String,
     recursive: bool,
-) -> Result<(), String> {
+) -> Result<(), crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || sts_sources::set_recursive(&root, &id, recursive))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("sts_sources_set_recursive", error))
 }
 
 #[tauri::command]
 async fn sts_sources_exclude(
     state: State<'_, Mutex<AppState>>,
     path: String,
-) -> Result<(), String> {
+) -> Result<(), crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || sts_sources::exclude(&root, &path))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("sts_sources_exclude", error))
 }
 
 #[tauri::command]
 async fn sts_sources_restore(
     state: State<'_, Mutex<AppState>>,
     path: String,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || sts_sources::restore(&root, &path))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("sts_sources_restore", error))
 }
 
 #[tauri::command]
-async fn sts_sources_clear(state: State<'_, Mutex<AppState>>) -> Result<(), String> {
+async fn sts_sources_clear(state: State<'_, Mutex<AppState>>) -> Result<(), crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || sts_sources::clear(&root))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("sts_sources_clear", error))
 }
 
 #[tauri::command]
-async fn sts_sources_delete(state: State<'_, Mutex<AppState>>, path: String) -> Result<(), String> {
+async fn sts_sources_delete(state: State<'_, Mutex<AppState>>, path: String) -> Result<(), crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || sts_sources::delete_file(&root, &path))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("sts_sources_delete", error))
 }
 
 #[tauri::command]
@@ -1790,18 +2156,23 @@ async fn sts_sources_rename(
     state: State<'_, Mutex<AppState>>,
     path: String,
     new_name: String,
-) -> Result<String, String> {
+) -> Result<String, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || sts_sources::rename_file(&root, &path, &new_name))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("sts_sources_rename", error))
 }
 
 #[tauri::command]
 async fn sts_snapshot(
     state: State<'_, Mutex<AppState>>,
     output: Option<String>,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || {
         Ok(sts_sources::snapshot(
@@ -1811,18 +2182,25 @@ async fn sts_snapshot(
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("sts_snapshot", error))
 }
 
 // --- 文字合成 TTS（文字 → SAPI → 可选 RVC）--------------------------------
 
 #[tauri::command]
-async fn tts_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn tts_status(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     // 列系统嗓子要起一次 PowerShell，几百毫秒。放在 IPC 线程上就是开窗那一下
     // 界面先白半秒。
     tauri::async_runtime::spawn_blocking(move || Ok(tts::status(&root)))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("tts_status", error))
 }
 
 #[tauri::command]
@@ -1834,13 +2212,17 @@ async fn tts_speak(
     rate: i32,
     pitch: i32,
     use_rvc: bool,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || {
         tts::run(&app, &root, &text, &voice, rate, pitch, use_rvc)
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("tts_speak", error))
 }
 
 /// 用指定音色念一句固定的话，用来当场听一下这个音色像不像。
@@ -1853,7 +2235,8 @@ async fn voice_audition(
     state: State<'_, Mutex<AppState>>,
     model_path: String,
     voice: Option<String>,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || {
         let text = crate::i18n::t("s.auditionText");
@@ -1870,6 +2253,9 @@ async fn voice_audition(
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("voice_audition", error))
 }
 
 #[tauri::command]
@@ -1879,10 +2265,14 @@ fn tts_cancel() {
 
 /// 在文件管理器里打开合成结果所在的目录。`use_rvc` 决定开哪一路。
 #[tauri::command]
-fn tts_reveal(state: State<'_, Mutex<AppState>>, use_rvc: bool) -> Result<(), String> {
+fn tts_reveal(state: State<'_, Mutex<AppState>>, use_rvc: bool) -> Result<(), crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let dir = tts::out_dir_for(&root_clone(&state)?, use_rvc);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     shell_extras::reveal(&dir.join("x"))
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("tts_reveal", error))
 }
 
 /// 选朗读 / 变声的输出目录。`window` 是为了让选择框挂在调用它的那扇窗上 ——
@@ -1892,7 +2282,8 @@ fn tts_pick_output(
     window: tauri::WebviewWindow,
     state: State<'_, Mutex<AppState>>,
     use_rvc: bool,
-) -> Result<Option<String>, String> {
+) -> Result<Option<String>, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let root = root_clone(&state)?;
     let picked = tts::pick_output(&root, Some(&window), use_rvc);
     // 输出目录可以在任何盘上；试听播放的正是写进这里的文件。
@@ -1900,24 +2291,35 @@ fn tts_pick_output(
         asset_scope::grant_dir(window.app_handle(), std::path::Path::new(p));
     }
     Ok(picked)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("tts_pick_output", error))
 }
 
 /// 把某一路的输出目录恢复成默认。
 #[tauri::command]
-fn tts_reset_output(state: State<'_, Mutex<AppState>>, use_rvc: bool) -> Result<(), String> {
+fn tts_reset_output(state: State<'_, Mutex<AppState>>, use_rvc: bool) -> Result<(), crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     tts::reset_output(&root_clone(&state)?, use_rvc);
     Ok(())
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("tts_reset_output", error))
 }
 
 // --- 附加资源（分离模型 / 训练底模）-----------------------------------------
 
 #[tauri::command]
-async fn extra_list(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn extra_list(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     // 要拉线上清单，可能等十几秒。同步命令会把 IPC 线程堵死。
     tauri::async_runtime::spawn_blocking(move || extra_assets::list(&root))
         .await
         .map_err(|e| e.to_string())
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("extra_list", error))
 }
 
 #[tauri::command]
@@ -1925,11 +2327,15 @@ async fn extra_download(
     app: AppHandle,
     state: State<'_, Mutex<AppState>>,
     key: String,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || extra_assets::download(&app, &root, &key))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("extra_download", error))
 }
 
 #[tauri::command]
@@ -1943,7 +2349,8 @@ fn extra_cancel() {
 /// Windows 上占用中的文件根本删不掉（报一句看不懂的 os error 32），
 /// Linux 上删得掉、但任务会在某个中途步骤炸 —— 两种都不如当场拦下来。
 #[tauri::command]
-async fn extra_remove(state: State<'_, Mutex<AppState>>, key: String) -> Result<Value, String> {
+async fn extra_remove(state: State<'_, Mutex<AppState>>, key: String) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     // 哪一类归哪个任务管，由清单里的 group 说了算，所以判断放在 extra_assets
     // 里做 —— 这里只负责把「谁正在跑」这两件事实递进去。
@@ -1951,13 +2358,20 @@ async fn extra_remove(state: State<'_, Mutex<AppState>>, key: String) -> Result<
     tauri::async_runtime::spawn_blocking(move || extra_assets::remove(&root, &key, sep, train))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("extra_remove", error))
 }
 
 // --- 训练 -------------------------------------------------------------------
 
 #[tauri::command]
-fn train_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+fn train_status(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     Ok(train::status(&root_clone(&state)?))
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("train_status", error))
 }
 
 /// 选数据集目录。原生对话框要主线程。
@@ -1989,8 +2403,12 @@ fn train_pick_output_dir(window: tauri::WebviewWindow) -> Option<String> {
 
 /// 上次选的存放目录。空 = 默认的 `User_Data/models`。
 #[tauri::command]
-fn train_output_dir(state: State<'_, Mutex<AppState>>) -> Result<String, String> {
+fn train_output_dir(state: State<'_, Mutex<AppState>>) -> Result<String, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     Ok(config::train_output_dir(&root_clone(&state)?))
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("train_output_dir", error))
 }
 
 #[tauri::command]
@@ -1998,33 +2416,49 @@ async fn train_start(
     app: AppHandle,
     state: State<'_, Mutex<AppState>>,
     req: train::TrainReq,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     // 训练动辄几小时。放 IPC 线程上等于窗口从此不动。
     tauri::async_runtime::spawn_blocking(move || train::run(&app, &root, req))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("train_start", error))
 }
 
 #[tauri::command]
-async fn train_queue_list(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn train_queue_list(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || train_queue::list(&root))
         .await.map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("train_queue_list", error))
 }
 
 #[tauri::command]
-async fn train_queue_add(app: AppHandle, state: State<'_, Mutex<AppState>>, req: train::TrainReq) -> Result<Value, String> {
+async fn train_queue_add(app: AppHandle, state: State<'_, Mutex<AppState>>, req: train::TrainReq) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || train_queue::enqueue(app, root, req))
         .await.map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("train_queue_add", error))
 }
 
 #[tauri::command]
-async fn train_queue_action(app: AppHandle, state: State<'_, Mutex<AppState>>, id: String, action: String) -> Result<Value, String> {
+async fn train_queue_action(app: AppHandle, state: State<'_, Mutex<AppState>>, id: String, action: String) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || train_queue::action(app, root, id, action))
         .await.map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("train_queue_action", error))
 }
 
 #[tauri::command]
@@ -2042,11 +2476,15 @@ async fn ckpt_run(
     app: AppHandle,
     state: State<'_, Mutex<AppState>>,
     req: Value,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || ckpt::run(&app, &root, req))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("ckpt_run", error))
 }
 
 #[tauri::command]
@@ -2055,7 +2493,8 @@ fn ckpt_cancel() {
 }
 
 #[tauri::command]
-async fn engine_force_kill(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn engine_force_kill(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     mobile::stop_audio();
     tauri::async_runtime::spawn_blocking(move || {
@@ -2091,6 +2530,9 @@ async fn engine_force_kill(state: State<'_, Mutex<AppState>>) -> Result<Value, S
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("engine_force_kill", error))
 }
 
 #[tauri::command]
@@ -2107,7 +2549,8 @@ async fn engine_set_hot(
     dsp_enabled: Option<bool>,
     dsp_preset: Option<String>,
     dsp_params: Option<Value>,
-) -> Result<u64, String> {
+) -> Result<u64, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     // 落盘 + set_hot 派发等待都要离开 IPC 线程（R01）。
     tauri::async_runtime::spawn_blocking(move || {
@@ -2128,6 +2571,9 @@ async fn engine_set_hot(
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("engine_set_hot", error))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2228,21 +2674,30 @@ fn engine_set_hot_inner(
 
 /// 变声中换音色。不重开流，只把新模型推给引擎。
 #[tauri::command]
-async fn engine_swap_model(state: State<'_, Mutex<AppState>>) -> Result<u64, String> {
+async fn engine_swap_model(state: State<'_, Mutex<AppState>>) -> Result<u64, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     // swap_model 走 set_hot，派发等待同样要离开 IPC 线程。
     tauri::async_runtime::spawn_blocking(move || worker::swap_model(&root))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("engine_swap_model", error))
 }
 
 #[tauri::command]
-async fn engine_list_devices(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn engine_list_devices(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     // Starts the worker if needed (up to 90s) and then polls for up to 20s.
     tauri::async_runtime::spawn_blocking(move || list_devices_blocking(root))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map(|value| crate::diagnostics::status(value, crate::diagnostics::command_feature("engine_list_devices")))
+        .map_err(|error| crate::diagnostics::command_error("engine_list_devices", error))
 }
 
 fn list_devices_blocking(root: std::path::PathBuf) -> Result<Value, String> {
@@ -2287,7 +2742,8 @@ fn list_devices_blocking(root: std::path::PathBuf) -> Result<Value, String> {
 }
 
 #[tauri::command]
-async fn provision_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn provision_status(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     // Async + spawn_blocking because this resolves a runtime spec, which can
     // reach CNB. A sync command runs on the IPC thread, so an unreachable or
@@ -2305,14 +2761,21 @@ async fn provision_status(state: State<'_, Mutex<AppState>>) -> Result<Value, St
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("provision_status", error))
 }
 
 #[tauri::command]
-async fn runtime_migration_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn runtime_migration_status(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || Ok(runtime_migration::status(&root)))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("runtime_migration_status", error))
 }
 
 #[tauri::command]
@@ -2320,11 +2783,15 @@ async fn runtime_migration_start(
     app: AppHandle,
     state: State<'_, Mutex<AppState>>,
     variant: Option<String>,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || runtime_migration::run(app, &root, variant))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("runtime_migration_start", error))
 }
 
 #[tauri::command]
@@ -2333,7 +2800,8 @@ async fn provision_start(
     state: State<'_, Mutex<AppState>>,
     variant: String,
     force: Option<bool>,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     let f = force.unwrap_or(false);
     // This downloads and extracts several GB. Run inline it occupied the IPC
@@ -2343,43 +2811,62 @@ async fn provision_start(
     tauri::async_runtime::spawn_blocking(move || provision::run_provision(app, root, variant, f))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("provision_start", error))
 }
 
 #[tauri::command]
-fn provision_cancel() -> Result<(), String> {
+fn provision_cancel() -> Result<(), crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     provision::cancel_provision();
     Ok(())
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("provision_cancel", error))
 }
 
 // ----- Stage 4: voices + store ------------------------------------------------
 
 #[tauri::command]
-async fn model_versions_list(state: State<'_, Mutex<AppState>>, target: String) -> Result<model_versions::ModelVersions, String> {
+async fn model_versions_list(state: State<'_, Mutex<AppState>>, target: String) -> Result<model_versions::ModelVersions, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || model_versions::list(&root, &target))
         .await.map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("model_versions_list", error))
 }
 
 #[tauri::command]
 async fn model_version_apply(
     app: AppHandle, state: State<'_, Mutex<AppState>>, target: String, kind: String, file: String,
-) -> Result<model_versions::ModelVersions, String> {
+) -> Result<model_versions::ModelVersions, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || {
         let result = model_versions::apply(&root, &target, &kind, &file)?;
         let _ = app.emit("voices-changed", json!({"dir": target}));
         Ok(result)
     }).await.map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("model_version_apply", error))
 }
 
 #[tauri::command]
-async fn voices_list(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn voices_list(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     // Walks the whole voice library; a large one is a visible stall on the IPC
     // thread.
     tauri::async_runtime::spawn_blocking(move || Ok(voices::list_voices(&root)))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("voices_list", error))
 }
 
 #[tauri::command]
@@ -2389,7 +2876,8 @@ async fn voices_select(
     path: Option<String>,
     dir: Option<String>,
     name: Option<String>,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     // 目录扫描 + 配置落盘，移出 IPC 线程。
     tauri::async_runtime::spawn_blocking(move || {
@@ -2408,10 +2896,14 @@ async fn voices_select(
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("voices_select", error))
 }
 
 #[tauri::command]
-async fn voices_clear(app: AppHandle, state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn voices_clear(app: AppHandle, state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     // clear_voice 会给在跑的 worker 发 drop_model（派发等待），移出 IPC 线程。
     tauri::async_runtime::spawn_blocking(move || {
@@ -2423,23 +2915,34 @@ async fn voices_clear(app: AppHandle, state: State<'_, Mutex<AppState>>) -> Resu
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("voices_clear", error))
 }
 
 #[tauri::command]
-async fn voices_current(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn voices_current(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || Ok(voices::current_selection_summary(&root)))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("voices_current", error))
 }
 
 #[tauri::command]
 fn voices_index_list(
     state: State<'_, Mutex<AppState>>,
     model_dir: String,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let root = root_clone(&state)?;
     voices::list_index_bindings(&root, &model_dir)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("voices_index_list", error))
 }
 
 #[tauri::command]
@@ -2447,9 +2950,13 @@ fn voices_index_use(
     state: State<'_, Mutex<AppState>>,
     model_dir: String,
     index_path: String,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let root = root_clone(&state)?;
     voices::set_active_index(&root, &model_dir, &index_path)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("voices_index_use", error))
 }
 
 #[tauri::command]
@@ -2458,7 +2965,8 @@ fn voices_index_bind(
     state: State<'_, Mutex<AppState>>,
     model_dir: String,
     index_src: Option<String>,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let root = root_clone(&state)?;
     let src = match index_src.filter(|s| !s.is_empty()) {
         Some(s) => s,
@@ -2467,6 +2975,9 @@ fn voices_index_bind(
         }
     };
     voices::bind_index_file(&root, &model_dir, &src)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("voices_index_bind", error))
 }
 
 #[tauri::command]
@@ -2474,18 +2985,26 @@ fn voices_index_unbind(
     state: State<'_, Mutex<AppState>>,
     model_dir: String,
     index_path: String,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let root = root_clone(&state)?;
     voices::unbind_index(&root, &model_dir, &index_path)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("voices_index_unbind", error))
 }
 
 #[tauri::command]
 fn voices_profiles_list(
     state: State<'_, Mutex<AppState>>,
     model_dir: String,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let root = root_clone(&state)?;
     voices::list_profiles(&root, &model_dir)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("voices_profiles_list", error))
 }
 
 #[tauri::command]
@@ -2493,9 +3012,13 @@ fn voices_profile_use(
     state: State<'_, Mutex<AppState>>,
     model_dir: String,
     profile_id: String,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let root = root_clone(&state)?;
     voices::set_active_profile(&root, &model_dir, &profile_id)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("voices_profile_use", error))
 }
 
 #[tauri::command]
@@ -2503,9 +3026,13 @@ fn voices_profile_save(
     state: State<'_, Mutex<AppState>>,
     model_dir: String,
     name: String,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let root = root_clone(&state)?;
     voices::save_current_as_profile(&root, &model_dir, &name)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("voices_profile_save", error))
 }
 
 #[tauri::command]
@@ -2513,9 +3040,13 @@ fn voices_profile_delete(
     state: State<'_, Mutex<AppState>>,
     model_dir: String,
     profile_id: String,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let root = root_clone(&state)?;
     voices::delete_profile(&root, &model_dir, &profile_id)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("voices_profile_delete", error))
 }
 
 #[tauri::command]
@@ -2523,9 +3054,13 @@ fn voices_profile_import(
     window: tauri::WebviewWindow,
     state: State<'_, Mutex<AppState>>,
     model_dir: String,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let root = root_clone(&state)?;
     voices::import_profile(Some(&window), &root, &model_dir)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("voices_profile_import", error))
 }
 
 #[tauri::command]
@@ -2533,9 +3068,13 @@ fn voices_profile_export(
     window: tauri::WebviewWindow,
     state: State<'_, Mutex<AppState>>,
     model_dir: String,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let root = root_clone(&state)?;
     voices::export_active_profile(Some(&window), &root, &model_dir)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("voices_profile_export", error))
 }
 
 #[tauri::command]
@@ -2544,7 +3083,8 @@ async fn voices_import(
     state: State<'_, Mutex<AppState>>,
     paths: Option<Vec<String>>,
     current_model_dir: Option<String>,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     // The picker stays here (native dialogs want the main thread); only the
     // copying, which can be gigabytes, moves off.
@@ -2563,17 +3103,24 @@ async fn voices_import(
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("voices_import", error))
 }
 
 #[tauri::command]
 async fn voices_delete(
     state: State<'_, Mutex<AppState>>,
     model_dir: String,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || voices::delete_voice(&root, &model_dir))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("voices_delete", error))
 }
 
 #[tauri::command]
@@ -2582,11 +3129,15 @@ fn voices_rename(
     state: State<'_, Mutex<AppState>>,
     model_dir: String,
     new_name: String,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let root = root_clone(&state)?;
     let out = voices::rename_voice(&root, &model_dir, &new_name)?;
     let _ = app.emit("voices-changed", &out);
     Ok(out)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("voices_rename", error))
 }
 
 /// 选一张图给「更换封面」用。返回绝对路径或 null（取消）。
@@ -2598,10 +3149,14 @@ fn voices_pick_cover(window: tauri::WebviewWindow) -> Option<String> {
 /// 本机路径或 http(s) 封面 → data URL。裁剪对话框必须走这条，不能把
 /// convertFileSrc 画进 canvas（会 tainted，保存/预览全挂）。
 #[tauri::command]
-async fn voices_cover_data_url(src: String) -> Result<String, String> {
+async fn voices_cover_data_url(src: String) -> Result<String, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     tauri::async_runtime::spawn_blocking(move || voices::cover_to_data_url(&src))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("voices_cover_data_url", error))
 }
 
 /// 写入界面裁好的封面（data URL，JPEG/PNG）。
@@ -2610,9 +3165,13 @@ fn voices_set_cover(
     state: State<'_, Mutex<AppState>>,
     model_dir: String,
     image: String,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let root = root_clone(&state)?;
     voices::set_cover(&root, &model_dir, &image)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("voices_set_cover", error))
 }
 
 /// 撤销自定义封面，回落到包内 / 清单封面。
@@ -2620,27 +3179,39 @@ fn voices_set_cover(
 fn voices_reset_cover(
     state: State<'_, Mutex<AppState>>,
     model_dir: String,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let root = root_clone(&state)?;
     voices::reset_cover(&root, &model_dir)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("voices_reset_cover", error))
 }
 
 #[tauri::command]
 async fn voices_promote(
     state: State<'_, Mutex<AppState>>,
     pth_path: String,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     // Copies a multi-hundred-MB .pth.
     tauri::async_runtime::spawn_blocking(move || voices::promote_legacy(&root, &pth_path))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("voices_promote", error))
 }
 
 #[tauri::command]
-fn voices_open_dir(state: State<'_, Mutex<AppState>>) -> Result<(), String> {
+fn voices_open_dir(state: State<'_, Mutex<AppState>>) -> Result<(), crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let root = root_clone(&state)?;
     voices::open_models_dir(&root)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("voices_open_dir", error))
 }
 
 #[tauri::command]
@@ -2655,13 +3226,17 @@ async fn community_install_voice(
     version_id: String,
     file_id: String,
     package_path: PathBuf,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || {
         store::install_community_voice(&root, &asset_id, &version_id, &file_id, &package_path)
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("community_install_voice", error))
 }
 
 #[tauri::command]
@@ -2669,7 +3244,8 @@ async fn store_catalog(
     state: State<'_, Mutex<AppState>>,
     prefer_remote: Option<bool>,
     starter_only: Option<bool>,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     let remote = prefer_remote.unwrap_or(true);
     tauri::async_runtime::spawn_blocking(move || {
@@ -2681,6 +3257,9 @@ async fn store_catalog(
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("store_catalog", error))
 }
 
 #[tauri::command]
@@ -2688,37 +3267,57 @@ async fn store_install(
     app: AppHandle,
     state: State<'_, Mutex<AppState>>,
     entry: Value,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     // Downloads and unpacks a voice pack. Same reason as provision_start: the
     // per-voice 取消 is its own invoke and has to be able to get through.
     tauri::async_runtime::spawn_blocking(move || store::install_voice_entry(app, root, entry))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("store_install", error))
 }
 
 #[tauri::command]
-fn store_cancel(voice_id: Option<String>) -> Result<(), String> {
+fn store_cancel(voice_id: Option<String>) -> Result<(), crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     // Empty / omitted id cancels everything in flight.
     store::cancel_store_download(voice_id.as_deref().unwrap_or(""));
     Ok(())
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("store_cancel", error))
 }
 
 /// 已下载但还没装的第三方音色。商店据此把按钮换成「查看 / 安装」。
 #[tauri::command]
-fn store_staged(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+fn store_staged(state: State<'_, Mutex<AppState>>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     Ok(store::staged_status(&root_clone(&state)?))
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("store_staged", error))
 }
 
 /// 在资源管理器里打开暂存目录，用户自己看文件、自己删。
 #[tauri::command]
-fn store_reveal_staged(state: State<'_, Mutex<AppState>>, voice_id: String) -> Result<(), String> {
+fn store_reveal_staged(state: State<'_, Mutex<AppState>>, voice_id: String) -> Result<(), crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     store::reveal_staged(&root_clone(&state)?, &voice_id)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("store_reveal_staged", error))
 }
 
 #[tauri::command]
-fn store_discard_staged(state: State<'_, Mutex<AppState>>, voice_id: String) -> Result<(), String> {
+fn store_discard_staged(state: State<'_, Mutex<AppState>>, voice_id: String) -> Result<(), crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     store::discard_staged(&root_clone(&state)?, &voice_id)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("store_discard_staged", error))
 }
 
 #[tauri::command]
@@ -2726,12 +3325,16 @@ async fn store_install_staged(
     app: AppHandle,
     state: State<'_, Mutex<AppState>>,
     entry: Value,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     // 解压几百 MB 的包，同样不能占 IPC 线程。
     tauri::async_runtime::spawn_blocking(move || store::install_staged(app, root, entry))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("store_install_staged", error))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -2767,10 +3370,14 @@ fn apply_webview_compat_flag(root: &std::path::Path) {
 /// 界面只有在直接采样被 canvas 的同源策略挡下来时才会调这条，多数机器上
 /// 一次都不会走到。详见 `wallpaper` 模块的说明。
 #[tauri::command]
-async fn wallpaper_data_url(path: String) -> Result<String, String> {
+async fn wallpaper_data_url(path: String) -> Result<String, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     tauri::async_runtime::spawn_blocking(move || wallpaper::data_url(&path))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("wallpaper_data_url", error))
 }
 
 pub fn run() {
@@ -2864,6 +3471,8 @@ pub fn run() {
         })
         .manage(Mutex::new(AppState { root: root.clone() }))
         .invoke_handler(tauri::generate_handler![
+            diagnostic_navigate,
+            diagnostic_system_settings,
             audio_edit::audio_trim,
             audio_edit::audio_cut,
             audio_library::audio_library_get,
@@ -3358,4 +3967,44 @@ pub fn run() {
                 }
             }
         });
+}
+
+#[tauri::command]
+fn diagnostic_navigate(app: AppHandle, destination: String) -> Result<(), diagnostics::CommandError> {
+    let result = (|| -> Result<(), String> {
+        if !matches!(destination.as_str(), "runtime" | "devices" | "community") {
+            return Err("unsupported diagnostic destination".into());
+        }
+        let main = app.get_webview_window("main").ok_or_else(|| i18n::t("s.toolMainWindowGone"))?;
+        main.unminimize().map_err(|e| e.to_string())?;
+        main.show().map_err(|e| e.to_string())?;
+        main.set_focus().map_err(|e| e.to_string())?;
+        main.emit("diagnostic-navigate", json!({"destination": destination})).map_err(|e| e.to_string())
+    })();
+    result.map_err(|e| diagnostics::command_error("diagnostic_navigate", e))
+}
+
+#[tauri::command]
+fn diagnostic_system_settings(kind: String) -> Result<(), diagnostics::CommandError> {
+    let result = (|| -> Result<(), String> {
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            let system = std::env::var_os("SystemRoot").ok_or("SystemRoot missing")?;
+            let system = PathBuf::from(system).join("System32");
+            let mut command = match kind.as_str() {
+                "performance" => std::process::Command::new(system.join("SystemPropertiesPerformance.exe")),
+                "storage" => {
+                    let mut command = std::process::Command::new(system.join("cmd.exe"));
+                    command.args(["/c", "start", "", "ms-settings:storagesense"]);
+                    command
+                }
+                _ => return Err("unsupported system settings action".into()),
+            };
+            command.creation_flags(0x0800_0000).spawn().map(|_| ()).map_err(|e| e.to_string())
+        }
+        #[cfg(not(windows))]
+        { let _ = kind; Err("only on Windows".into()) }
+    })();
+    result.map_err(|e| diagnostics::command_error("diagnostic_system_settings", e))
 }

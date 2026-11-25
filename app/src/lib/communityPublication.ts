@@ -1,4 +1,5 @@
-import { invoke } from "@tauri-apps/api/core";
+import { diagnosticOf, errorWithTitle } from "./diagnostics";
+import { invoke } from "./invoke";
 import { t } from "../i18n/t";
 
 export type License = { id?: string; url?: string; text?: string };
@@ -338,15 +339,16 @@ export async function prepareSubmission(draft: Draft, account: string, send = pu
 }
 
 export function publicationError(error: unknown, action: "resolve" | "submit" | "list") {
+  const text = (key: string) => diagnosticOf(error) ? errorWithTitle(error, key, "store") : t(key);
   const code = typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
-  if (code === "unauthorized" || (code === "auth_required" && action !== "resolve")) return t("publication.signInRequired");
-  if (action === "submit" && ["read_source", "conflict", "not_found"].includes(String(code))) return t("publication.readAgain");
-  if (code === "source_changed") return t("publication.sourceChanged");
-  if (code === "invalid_cover") return t("publication.coverError");
-  if (code === "unchanged_package") return t("publication.unchangedPackage");
-  if (code === "unchanged_version") return t("publication.unchangedVersion");
-  if (code === "hash_mismatch") return t("publication.hashMismatch");
-  if (code === "rate_limited") return t(action === "resolve" ? "publication.rateLimited" : "publication.retryQueued");
-  if (action === "resolve" && (code === "auth_required" || code === "unsupported" || code === "not_found")) return t("publication.publicSource");
-  return t("publication.requestFailed");
+  if (code === "unauthorized" || (code === "auth_required" && action !== "resolve")) return text("publication.signInRequired");
+  if (action === "submit" && ["read_source", "conflict", "not_found"].includes(String(code))) return text("publication.readAgain");
+  if (code === "source_changed") return text("publication.sourceChanged");
+  if (code === "invalid_cover") return text("publication.coverError");
+  if (code === "unchanged_package") return text("publication.unchangedPackage");
+  if (code === "unchanged_version") return text("publication.unchangedVersion");
+  if (code === "hash_mismatch") return text("publication.hashMismatch");
+  if (code === "rate_limited") return text(action === "resolve" ? "publication.rateLimited" : "publication.retryQueued");
+  if (action === "resolve" && (code === "auth_required" || code === "unsupported" || code === "not_found")) return text("publication.publicSource");
+  return text("publication.requestFailed");
 }

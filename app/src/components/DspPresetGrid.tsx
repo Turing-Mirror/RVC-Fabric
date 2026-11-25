@@ -1,5 +1,6 @@
+import { ErrorNote } from "./ErrorNote";
 import { useEffect, useMemo, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invokeFor } from "../lib/invoke";
 import { Btn } from "./ui";
 import { t } from "../i18n/t";
 import { useI18n } from "../i18n";
@@ -80,7 +81,7 @@ export function DspPresetGrid({
 
   useEffect(() => {
     let alive = true;
-    void invoke<{ presets: DspPreset[] }>("dsp_presets")
+    void invokeFor<{ presets: DspPreset[] }>("settings", "dsp_presets")
       .then((r) => {
         if (!alive) return;
         const items = r.presets || [];
@@ -121,7 +122,7 @@ export function DspPresetGrid({
     );
   }
   if (msg) {
-    return <div className="text-[12.5px] text-[var(--meta)] py-6 px-2">{msg}</div>;
+    return <ErrorNote text={msg} feature="settings" />;
   }
   if (!view.length) {
     return (

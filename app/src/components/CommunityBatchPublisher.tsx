@@ -1,3 +1,5 @@
+import { ErrorNote } from "./ErrorNote";
+import { diagnosticOf, errorWithTitle } from "../lib/diagnostics";
 import { useEffect, useRef, useState } from "react";
 import { useI18n as useUiI18n, Field, Pane, Panes, SearchBox, SegmentControl, TextArea, TextInput, useNotify, usePaged } from "trm-ui";
 import { useI18n } from "../i18n";
@@ -171,7 +173,7 @@ export function CommunityBatchPublisher({ auth, sourceLink = "", onBack, onSubmi
       update({ rows: next });
       if (!matched.size) setError(t("publication.noMatches"));
       else tip(t("publication.matchedCount", { v0: matched.size }));
-    } catch { setError(t("publication.packReadError")); }
+    } catch (cause) { setError(errorWithTitle(cause, "publication.packReadError", "importexport")); }
     finally { setBusy(undefined); }
   }
 
@@ -181,7 +183,7 @@ export function CommunityBatchPublisher({ auth, sourceLink = "", onBack, onSubmi
       await saveBatch(account, batch);
       if (leave) onBack();
       else tip(t("publication.saved"));
-    } catch { setError(t("publication.saveFailed")); }
+    } catch (cause) { setError(errorWithTitle(cause, "publication.saveFailed", "store")); }
     finally { setBusy(undefined); }
   }
 
@@ -269,7 +271,7 @@ export function CommunityBatchPublisher({ auth, sourceLink = "", onBack, onSubmi
     </>} />
     <SegmentControl value={step} options={steps.map((id) => ({ id, label: labels[id], disabled: id !== "source" && !rows.length }))}
       onChange={(value) => { if (!busy) setStep(value as Step); }} />
-    {error && <Warn className="my-3">{error}</Warn>}
+    {error && <Warn className="my-3">{diagnosticOf(error) ? <ErrorNote text={error} feature="store" /> : error}</Warn>}
     <Panes value={step} order={steps} transition="slide" className="mt-4" keepScroll>
       <Pane id="source">
         <div className="space-y-4 py-3">
@@ -362,7 +364,7 @@ export function CommunityBatchPublisher({ auth, sourceLink = "", onBack, onSubmi
               <CommunityCover value={row.draft.cover} original={row.draft.coverPath} name={row.draft.title}
                 onChange={(cover, coverPath) => updateRow(active, { cover, coverPath })} disabled={Boolean(busy)} />
             </>}
-            {row?.error && <Warn>{row.error}</Warn>}
+            {row?.error && <Warn>{diagnosticOf(row.error) ? <ErrorNote text={row.error} feature="store" /> : row.error}</Warn>}
             {details && (row?.submitted || row?.draft.pending) && <p className="text-[13px]">{t(row.submitted ? "publication.sent" : "publication.retryQueued")}</p>}
           </div>
         </div>
@@ -382,7 +384,7 @@ export function CommunityBatchPublisher({ auth, sourceLink = "", onBack, onSubmi
                   <div className="text-[var(--help)]">{[draft.originalAuthor, draft.label, draft.license.id].filter(Boolean).join("  ")}</div>
                   {draft.publisherRole !== "original_author" && draft.authorUrl && <div className="break-words text-[var(--help)]"
                     title={draft.authorUrl}>{authorLinkName(draft.authorUrl, draft.authorUrlLabel)}</div>}
-                  {item.error && <div className="text-[var(--warn)]">{item.error}</div>}
+                  {item.error && (diagnosticOf(item.error) ? <ErrorNote text={item.error} feature="store" /> : <div className="text-[var(--warn)]">{item.error}</div>)}
                 </div>
                 {item.submitted ? <span className="text-[var(--help)]">{t("publication.pending")}</span> :
                   <Btn disabled={Boolean(busy)} onClick={() => { setActive(id); setStep("details"); }}>

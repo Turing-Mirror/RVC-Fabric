@@ -1,3 +1,4 @@
+import { ErrorNote } from "./ErrorNote";
 import {
   useCallback,
   useEffect,
@@ -515,7 +516,7 @@ export function StoreSection({ reloadToken, onInstalled, onAuthor, onOpenModel, 
   if (detail) {
     const model = list[0];
     return <>
-      {(err || jobs.error) && <Warn className="mb-4">{err || jobs.error}</Warn>}
+      {(err || jobs.error) && <Warn className="mb-4"><ErrorNote text={err || jobs.error} feature="store" /></Warn>}
       {model ? <VoiceCard {...cardProps(model)} detail />
         : !err && <p className="text-[13px] text-[var(--help)]">{t(loading ? "s.f950213ab7" : "publication.noMatchingModels")}</p>}
     </>;
@@ -612,9 +613,7 @@ export function StoreSection({ reloadToken, onInstalled, onAuthor, onOpenModel, 
       ) : null}
 
       {err || jobs.error ? (
-        <div className="mb-3 text-[12.5px] leading-relaxed whitespace-pre-line break-words text-[var(--danger-text)]">
-          {err || jobs.error}
-        </div>
+        <ErrorNote text={err || jobs.error} feature="store" />
       ) : null}
 
       {/* gridRef 挂在网格上，宽度是从它的父级量的 —— 系列视图下网格有好几个，

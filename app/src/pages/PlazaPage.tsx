@@ -8,6 +8,7 @@ import { CommunityPublisher } from "../components/CommunityPublisher";
 import { CommunityModelDetail } from "../components/CommunityModelDetail";
 import { CommunitySubmissionDetail } from "../components/CommunitySubmissionDetail";
 import { CommunitySubmissions } from "../components/CommunitySubmissions";
+import { diagnosticOf, errorSummary } from "../lib/diagnostics";
 import { editListingDraft, loadDrafts, newDraft, newVersionDraft, publication, publicationError, storeDrafts, type CatalogModel, type Draft, type ModelDetail, type PublishedVersion, type Submission } from "../lib/communityPublication";
 import { StoreSection } from "../components/StoreSection";
 import { Pager } from "../components/Pager";
@@ -128,7 +129,10 @@ function PlazaPageImpl(props: PlazaProps) {
       });
       if (request === revisionRequest.current) editVersion(result.asset, result.version, "submissions", metadataOnly);
     } catch (error) {
-      if (request === revisionRequest.current) tip(publicationError(error, "list"));
+      if (request === revisionRequest.current) {
+        const msg = publicationError(error, "list");
+        tip(diagnosticOf(msg) ? errorSummary(msg, "store") : msg);
+      }
     }
   }
 

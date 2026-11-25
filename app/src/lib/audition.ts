@@ -7,7 +7,8 @@
  * 不额外附带样音：产品自带的 SAPI 朗读 + 离线换声本来就能凑出一段人声，省掉
  * 一份要考虑体积和授权的内置音频，念的那句话还能跟着界面语言走。
  */
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import { invoke } from "./invoke";
 
 let player: HTMLAudioElement | null = null;
 

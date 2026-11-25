@@ -16,7 +16,7 @@ it("lists an installed voice without changing the returned current state", async
 
 it("passes the candidate filename and kind and surfaces native errors", async () => {
   bridge.invoke.mockRejectedValue("missing candidate");
-  await expect(applyModelVersion("models/voice", "rvc", "voice_e2_s40.pth")).rejects.toBe("missing candidate");
+  await expect(applyModelVersion("models/voice", "rvc", "voice_e2_s40.pth")).rejects.toMatchObject({ diagnostic: { scope: { feature: "importexport" }, detail: { text: "missing candidate" } } });
   expect(bridge.invoke).toHaveBeenCalledWith("model_version_apply", {
     target: "models/voice", kind: "rvc", file: "voice_e2_s40.pth",
   });

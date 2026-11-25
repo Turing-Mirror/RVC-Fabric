@@ -123,10 +123,6 @@ fn fallback_blob(variant: &str) -> Value {
     })
 }
 
-pub(crate) fn http_get_json(url: &str, timeout_secs: u64) -> Result<Value, String> {
-    http_get_json_ex(url, timeout_secs, false)
-}
-
 fn http_get_json_ex(url: &str, timeout_secs: u64, no_cache: bool) -> Result<Value, String> {
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(timeout_secs))

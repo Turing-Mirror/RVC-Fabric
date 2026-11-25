@@ -1,6 +1,7 @@
+import type { Diagnostic } from "./diagnostics";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { invoke } from "./invoke";
+import { listen } from "./listen";
 import { dropListen } from "./tauriListen";
 
 export type TrainJobState = "queued" | "running" | "cancelling" | "paused" | "interrupted" | "completed" | "failed" | "cancelled";
@@ -9,7 +10,8 @@ export const TRAIN_STAGES: TrainStage[] = ["preprocess", "f0", "feature", "train
 export type TrainJob = {
   id: string;
   state: TrainJobState;
-  req: { exp: string; sample_rate: string; dataset: string; total_epoch: number; batch_size: number };
+  req: { exp: string; sample_rate: string; dataset: string; total_epoch: number; batch_size: number; save_every?: number; f0_method?: string; resume?: boolean; save_every_weights?: boolean; output_dir?: string };
+  diagnostic?: Diagnostic | null;
   progress: { stage?: TrainStage; done?: number; total?: number; message_code?: string } | null;
   error: string;
   result?: { weights?: string; index?: string; leftover_bytes?: number } | null;

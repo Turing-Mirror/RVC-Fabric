@@ -1039,6 +1039,7 @@ fn kill_tree(pid: u32) {
 }
 
 fn emit(app: &AppHandle, payload: Value, job_id: Option<&str>) {
+    let payload = crate::diagnostics::event(payload, fabric_diagnostics::Feature::Training);
     if let Some(id) = job_id {
         crate::train_queue::progress(app, id, &payload);
     }
@@ -1378,7 +1379,7 @@ pub fn normalize_output_dir(raw: &str) -> Result<String, String> {
 
 /// 阻塞跑一次训练，调用方负责挪到后台线程。
 pub fn run(app: &AppHandle, root: &Path, req: TrainReq) -> Result<Value, String> {
-    run_queued(app, root, req, None, None)
+    run_queued(app, root, req, None, None, None)
 }
 
 pub(crate) fn run_queued(
@@ -1387,6 +1388,7 @@ pub(crate) fn run_queued(
     mut req: TrainReq,
     job_id: Option<&str>,
     device_override: Option<&str>,
+    attempt: Option<u32>,
 ) -> Result<Value, String> {
     loop {
         if job_id.is_some_and(crate::train_queue::cancelled) {
@@ -1457,8 +1459,20 @@ pub(crate) fn run_queued(
         "train run log {}",
         log.file_name().and_then(|s| s.to_str()).unwrap_or("train")
     );
+    let log_slice = crate::diagnostics::LogSlice::start(&log);
     let mut progress = Progress::default();
-    let result = run_inner(app, root, &req, &log, &mut progress, job_id, device);
+    let result = run_inner(app, root, &req, &log, &mut progress, job_id, device)
+        .map_err(|raw| {
+            if raw == crate::i18n::t("s.a5ffdc95ee") { return raw; }
+            let raw = if crate::diagnostics::decode(&raw).is_some() { raw } else {
+                let mut value = json!({"phase":"error", "message":raw, "stage":progress.stage});
+                value["detail"] = json!(log_slice.text().unwrap_or_default());
+                training_error(&req, job_id, device, &value)
+            };
+            let mut failure = crate::diagnostics::decode(&raw).expect("training diagnostic");
+            failure.diagnostic.scope.attempt = attempt;
+            log_slice.finish(fabric_diagnostics::Feature::Training, failure.encoded())
+        });
     let outcome = match &result {
         Ok(_) => "ok",
         Err(e) if e == &crate::i18n::t("s.a5ffdc95ee") => "cancelled",
@@ -1553,7 +1567,7 @@ fn run_inner(
     let stdout = child.stdout.take().ok_or(crate::i18n::t("s.c73d43b29b"))?;
 
     let mut done: Option<Value> = None;
-    let mut fail: Option<String> = None;
+    let mut fail: Option<Value> = None;
     for line in BufReader::new(stdout).lines().map_while(Result::ok) {
         if cancel_flag().load(Ordering::SeqCst) {
             kill_tree(child.id());
@@ -1565,20 +1579,11 @@ fn run_inner(
         };
         note_progress(log, &v, progress);
         match v.get("phase").and_then(|x| x.as_str()).unwrap_or("") {
-            "error" => {
-                fail = Some({
-                    let m = crate::i18n::t_worker_msg(&v);
-                    if m.is_empty() {
-                        crate::i18n::t("s.60a21a8105")
-                    } else {
-                        m
-                    }
-                })
-            }
+            "error" => { fail = Some(v.clone()); }
             "done" => done = Some(v.clone()),
             _ => {}
         }
-        emit(app, v, job_id);
+        if v["phase"] != "error" { emit(app, v, job_id); }
     }
 
     let st = child
@@ -1587,8 +1592,9 @@ fn run_inner(
     if cancel_flag().load(Ordering::SeqCst) {
         return Err(crate::i18n::t("s.a5ffdc95ee").into());
     }
-    if let Some(e) = fail {
-        return Err(e);
+    if let Some(mut e) = fail {
+        e["exit_code"] = json!(st.code());
+        return Err(training_error(req, job_id, device, &e));
     }
     if !st.success() {
         return Err(crate::i18n::t2(
@@ -2162,5 +2168,57 @@ mod tests {
         assert!(!disabled.save_every_weights);
         let persisted: TrainReq = serde_json::from_value(serde_json::to_value(disabled).unwrap()).unwrap();
         assert!(!persisted.save_every_weights);
+    }
+}
+
+pub(crate) fn training_error(req: &TrainReq, job_id: Option<&str>, device: &str, value: &Value) -> String {
+    use fabric_diagnostics::{Backend, Feature, Operation};
+    let mut e = crate::diagnostics::worker_evidence(Feature::Training, value);
+    e.job_id = job_id.map(str::to_owned);
+    e.context.retry_safe = Some(job_id.is_some());
+    e.context.batch.get_or_insert_with(|| std::collections::BTreeMap::from([("train".into(), req.batch_size)]));
+    if e.context.backend.is_none() {
+        e.context.backend = match device { "cuda" => Some(Backend::Cuda), "cpu" => Some(Backend::Cpu), _ => None };
+    }
+    e.context.operation = Some(Operation::Train);
+    e.stage = Some(match e.stage.as_deref() {
+        Some("preprocess" | "f0" | "feature") => "format",
+        Some("train") => "train",
+        _ => "prepare",
+    }.into());
+    crate::diagnostics::failure(e, crate::i18n::t_worker_msg(value)).encoded()
+}
+
+#[cfg(test)]
+mod diagnostic_tests {
+    use super::*;
+    fn request() -> TrainReq {
+        TrainReq { exp: "test".into(), dataset: "test".into(), sample_rate: "48k".into(),
+            total_epoch: 10, batch_size: 8, save_every: 5, f0_method: "rmvpe".into(),
+            resume: false, save_every_weights: true, output_dir: String::new() }
+    }
+    #[test]
+    fn oom_uses_effective_stage_batch_and_precision() {
+        let value = json!({"stage":"train","message":"failed",
+            "detail":"torch.cuda.OutOfMemoryError: CUDA out of memory",
+            "context":{"batch":{"train":4},"backend":"cuda","precision":"fp32"}});
+        let failure = crate::diagnostics::decode(&training_error(&request(), Some("job-1"), "cuda", &value)).unwrap();
+        assert_eq!(failure.diagnostic.code, "diag.oom_gpu");
+        assert_eq!(failure.diagnostic.scope.stage.as_deref(), Some("train"));
+        assert!(failure.diagnostic.actions.iter().any(|a| matches!(a,
+            fabric_diagnostics::Action::EditTrainingCopy { job_id, current: 4, suggested: 2, .. } if job_id == "job-1")));
+        assert!(failure.diagnostic.detail.text.contains("fp32"));
+        let value = json!({"stage":"f0","detail":"CUDA out of memory","context":{"batch":{"train":4}}});
+        let failure = crate::diagnostics::decode(&training_error(&request(), Some("job-1"), "cuda", &value)).unwrap();
+        assert_eq!(failure.diagnostic.title.key, "diag.title.trainingFormat");
+        assert!(!failure.diagnostic.actions.iter().any(|a| matches!(a, fabric_diagnostics::Action::EditTrainingCopy { .. })));
+    }
+    #[test]
+    fn unknown_training_failure_can_be_retried_without_guessing() {
+        let failure = crate::diagnostics::decode(&training_error(&request(), Some("job-2"), "cpu",
+            &json!({"stage":"train","detail":"unexpected worker exit","exit_code":1}))).unwrap();
+        assert_eq!(failure.diagnostic.code, "diag.unknown");
+        assert!(failure.diagnostic.steps.iter().any(|s| s.key == "diag.step.retry"));
+        assert!(failure.diagnostic.detail.text.contains("unexpected worker exit"));
     }
 }

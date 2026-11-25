@@ -1,3 +1,5 @@
+import { ErrorNote } from "../components/ErrorNote";
+import { diagnosticOf, errorWithTitle } from "../lib/diagnostics";
 import { useCallback, useEffect, useRef, useState, memo } from "react";
 import { CoverPlaceholder, ThumbImage, usePageLeave } from "trm-ui";
 import { Btn, Block, PagePad } from "../components/ui";
@@ -207,7 +209,7 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenP
       setLoadError("");
     } catch (e) {
       if (revision !== loadRevision.current) return;
-      setLoadError(String(e));
+      setLoadError(errorWithTitle(e, "s.voicesReadFailed", "other"));
     } finally {
       if (revision === loadRevision.current) setLoaded(true);
     }
@@ -265,7 +267,7 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenP
     });
     if (out.kind === "error") {
       // Clicking a card and having nothing happen is the worst outcome.
-      setMsg(t("home.switchFail", { error: out.error }));
+      setMsg(errorWithTitle(out.error, "home.switchFailed", "realtimevoicechange"));
     }
   };
 
@@ -292,11 +294,13 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenP
           style={{ background: STAGE_BG }}
         >
           <h2 className="text-[25px] font-semibold tracking-tight m-0 mb-4 max-[860px]:text-2xl">{bannerTexts.ready ? bannerTexts.title || t("s.9d835868b4") : ""}</h2>
-          <p className="text-[12.5px] text-[var(--ink-muted)] m-0">
-            {loadError
-              ? t("s.c4a98bd0e6", { v0: loadError })
-              : t("s.2a26295b90")}
-          </p>
+          {loadError ? (
+            <ErrorNote text={loadError} feature="other" />
+          ) : (
+            <p className="text-[12.5px] text-[var(--ink-muted)] m-0">
+              {t("s.2a26295b90")}
+            </p>
+          )}
           <HeroEmblem />
         </div>
         <PagePad>
@@ -337,7 +341,11 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenP
           action={<Btn onClick={onOpenModels}>{t("s.35e4afb47d")}</Btn>}
         >
           {msg ? (
-            <p className="text-[12.5px] text-[var(--danger-text)] m-0 mb-3">{msg}</p>
+            diagnosticOf(msg) ? (
+              <ErrorNote text={msg} feature="realtimevoicechange" />
+            ) : (
+              <p className="text-[12.5px] text-[var(--danger-text)] m-0 mb-3">{msg}</p>
+            )
           ) : null}
           <div
             ref={flipRowRef}

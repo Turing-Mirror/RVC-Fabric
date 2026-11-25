@@ -9,7 +9,7 @@ import {
 import { createPortal } from "react-dom";
 import { usePaneOn } from "trm-ui";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../lib/invoke";
 
 // D-02 工具面板按需加载：主窗口不需要这三块，各自独立 chunk。
 const SeparatePanel = lazy(() =>

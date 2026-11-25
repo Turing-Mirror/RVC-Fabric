@@ -2289,7 +2289,8 @@ pub fn export_model(root: &Path, model_dir: &str, dest: &Path) -> Result<(), Str
 }
 
 #[tauri::command]
-pub async fn voices_export_model(window: tauri::WebviewWindow, state: tauri::State<'_, std::sync::Mutex<crate::AppState>>, model_dir: String) -> Result<Option<String>, String> {
+pub async fn voices_export_model(window: tauri::WebviewWindow, state: tauri::State<'_, std::sync::Mutex<crate::AppState>>, model_dir: String) -> Result<Option<String>, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = crate::root_clone(&state)?;
     guard_model_dir(&root, Path::new(&model_dir))?;
     let name = read_sidecar(Path::new(&model_dir)).get("name").and_then(|v| v.as_str()).unwrap_or("voice").to_string();
@@ -2302,6 +2303,9 @@ pub async fn voices_export_model(window: tauri::WebviewWindow, state: tauri::Sta
         let _ = crate::shell_extras::reveal(&dest);
         Ok(Some(dest.to_string_lossy().into_owned()))
     }).await.map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("voices_export_model", error))
 }
 
 // ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 import { configSnapshot } from "./configSnapshot";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "./invoke";
 import { t } from "../i18n/t";
 
 export type Config = Record<string, unknown>;

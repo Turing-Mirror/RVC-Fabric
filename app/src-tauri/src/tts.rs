@@ -141,12 +141,12 @@ pub fn cancel() {
 fn emit(app: &AppHandle, phase: &str, done: u64, total: u64, message: &str) {
     let _ = app.emit(
         "tts-progress",
-        json!({
+        crate::diagnostics::event(json!({
             "phase": phase,
             "done": done,
             "total": total.max(1),
             "message": message,
-        }),
+        }), fabric_diagnostics::Feature::Tts),
     );
 }
 
@@ -177,11 +177,12 @@ $s.Dispose()
 }
 
 fn run_powershell(script: &str) -> Result<String, String> {
+    let script = format!("$ErrorActionPreference = 'Stop'\n[Console]::OutputEncoding = [Text.UTF8Encoding]::new()\n{script}");
     let mut cmd = Command::new("powershell");
-    cmd.args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script])
+    cmd.args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", &script])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null());
+        .stderr(Stdio::piped());
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -189,7 +190,7 @@ fn run_powershell(script: &str) -> Result<String, String> {
     }
     let out = cmd.output().map_err(|e| crate::i18n::te("s.6fe5607f45", &(e)))?;
     if !out.status.success() {
-        return Err(crate::i18n::t("s.787332269e").into());
+        return Err(format!("{}\nexit status: {}\n{}", crate::i18n::t("s.787332269e"), out.status, String::from_utf8_lossy(&out.stderr)));
     }
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
@@ -332,11 +333,12 @@ pub fn run_with_model(
         "tts run log {}",
         log.file_name().and_then(|s| s.to_str()).unwrap_or("tts")
     );
+    let log_slice = crate::diagnostics::LogSlice::start(&log);
     let mut trace = crate::logging::RunTrace::new(log.clone());
     let started = std::time::Instant::now();
     let result = run_inner(
         app, root, text, voice, rate, pitch, use_rvc, model_path, &mut trace,
-    );
+    ).map_err(|raw| log_slice.finish(fabric_diagnostics::Feature::Tts, raw));
     let outcome = match &result {
         Ok(_) => "ok",
         Err(e) if e == &crate::i18n::t("s.a5ffdc95ee") => "cancelled",
@@ -593,5 +595,15 @@ mod tests {
         assert!(MAX_CHARS > 0);
         let long: String = crate::i18n::t("s.582c50066c").repeat(MAX_CHARS + 1);
         assert!(long.chars().count() > MAX_CHARS);
+    }
+}
+
+#[cfg(all(test, windows))]
+mod diagnostic_tests {
+    #[test]
+    fn powershell_failure_retains_stderr() {
+        let error = super::run_powershell("Write-Error 'diagnostic-stderr-fixture'").unwrap_err();
+        assert!(error.contains("diagnostic-stderr-fixture"));
+        assert!(error.contains("exit status:"));
     }
 }

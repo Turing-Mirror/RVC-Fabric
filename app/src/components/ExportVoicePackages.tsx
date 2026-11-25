@@ -1,5 +1,7 @@
+import { ErrorNote } from "./ErrorNote";
 import { useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invokeFor } from "../lib/invoke";
+import { errorWithTitle } from "../lib/diagnostics";
 import { useI18n as useUiI18n, Group, Modal, SearchBox, Toggle } from "trm-ui";
 import { Btn, Warn } from "./ui";
 import { useI18n } from "../i18n";
@@ -51,13 +53,13 @@ export function ExportVoicePackages({ open, voices, onClose }: {
     setBusy(true);
     setError("");
     try {
-      const exported = await invoke<ExportResult | null>("publication_export_packs", { dirs });
+      const exported = await invokeFor<ExportResult | null>("importexport", "publication_export_packs", { dirs });
       if (exported) {
         setRequestedIds(dirs);
         setResult(exported);
       }
-    } catch {
-      setError(t("publication.packReadError"));
+    } catch (cause) {
+      setError(errorWithTitle(cause, "publication.packReadError", "importexport"));
     } finally {
       setBusy(false);
     }
@@ -68,7 +70,7 @@ export function ExportVoicePackages({ open, voices, onClose }: {
     <Modal open={open} onClose={close} label={title} width={640}>
       <div className="space-y-4 p-6">
         <h2 className="m-0 text-[16px] font-semibold">{title}</h2>
-        {error && <Warn>{error}</Warn>}
+        {error && <Warn><ErrorNote text={error} feature="importexport" /></Warn>}
         <CatalogTransition scope={result ? "result" : "selection"} order={["selection", "result"]}>
           {result ? (
             <div className="space-y-3 text-[13px]" role="status">
@@ -78,7 +80,7 @@ export function ExportVoicePackages({ open, voices, onClose }: {
                 <ul className="m-0 max-h-[36vh] list-none space-y-3 overflow-y-auto p-0">
                   {failures.map((row, index) => <li key={index}>
                     <p className="m-0">{t("publication.packFailed", { v0: row.name })}</p>
-                    <p className="m-0 mt-1 whitespace-pre-wrap break-words text-[12.5px] text-[var(--help)]">{row.error}</p>
+                    <ErrorNote text={row.error} feature="importexport" />
                   </li>)}
                 </ul>
               </Group>}

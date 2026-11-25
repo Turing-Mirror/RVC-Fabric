@@ -1024,11 +1024,15 @@ def run_batch(
                     traceback.print_exc()
                     reason = friendly_error(e)
                     hit_oom = is_oom(reason)
-                    skipped.append({"file": str(src), "name": src.name, "reason": reason, "tag": entry.tag})
+                    import uuid
+                    evidence = {"error_id": uuid.uuid4().hex, "detail": traceback.format_exc(),
+                                "os_error": getattr(e, "winerror", None)}
+                    skipped.append({"file": str(src), "name": src.name, "reason": reason, "tag": entry.tag, **evidence})
                     prog.file_done(i, src.name, ok=False)
                     # reason 单独字段，界面列表不要再叠一层「跳过 name：」。
                     emit(
                         phase="skip",
+                        **evidence,
                         done=i,
                         total=total,
                         pct=prog.last_pct,

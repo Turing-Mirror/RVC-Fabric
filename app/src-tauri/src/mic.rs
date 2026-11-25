@@ -16,7 +16,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use serde_json::{json, Value};
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 
 use crate::paths;
 
@@ -56,24 +56,20 @@ fn emit(app: &AppHandle, phase: &str, peak: Option<f64>, sec: Option<f64>, messa
     if let Some(v) = sec {
         body["sec"] = json!(v);
     }
-    let _ = app.emit("mic-test", body);
+    let _ = crate::diagnostics::emit(&app, "mic-test", body);
 }
 
-/// worker 报的稳定标识 → 界面文案。
-///
-/// 不直接把 Python 那句中文丢给用户：软件有八种语言，而 worker 只写中文
-/// 兜底。标识对不上就退回 worker 那句话 —— 有句能看的中文，也好过一个空白。
-fn message_for(code: &str, fallback: &str) -> String {
+/// worker 报的稳定标识 → 界面文案的键。诊断认不出原因时，这句话作为原因显示。
+fn message_key(code: &str) -> Option<&'static str> {
     match code {
-        "busy" => crate::i18n::t("s.micErrBusy"),
-        "notfound" => crate::i18n::t("s.micErrNotFound"),
-        "nolib" => crate::i18n::t("s.micErrNoLib"),
+        "busy" => Some("s.micErrBusy"),
+        "notfound" => Some("s.micErrNotFound"),
+        "nolib" => Some("s.micErrNoLib"),
         // 一帧都没读到。多半是用户开完立刻点了停止，也可能是设备开着但完全
         // 不出数据 —— 两种情况对用户来说是同一句话：没听见。
-        "silent" => crate::i18n::t("s.micTestSilent"),
-        "enum" | "open" => crate::i18n::t("s.micErrOpen"),
-        _ if !fallback.is_empty() => fallback.to_string(),
-        _ => crate::i18n::t("s.micErrOpen"),
+        "silent" => Some("s.micTestSilent"),
+        "enum" | "open" => Some("s.micErrOpen"),
+        _ => None,
     }
 }
 
@@ -87,7 +83,10 @@ pub fn test(app: &AppHandle, root: &Path) -> Result<Value, String> {
         *g = true;
     }
     cancel_flag().store(false, Ordering::SeqCst);
-    let out = test_inner(app, root);
+    let log = crate::logging::begin_run(root, crate::logging::CH_STS, &json!({"operation":"mic_test"}));
+    let slice = crate::diagnostics::LogSlice::start(&log);
+    let out = test_inner(app, root, &log)
+        .map_err(|error| slice.finish(fabric_diagnostics::Feature::Recording, error));
     *BUSY.lock().unwrap_or_else(|e| e.into_inner()) = false;
     *STOP_FILE.lock().unwrap_or_else(|e| e.into_inner()) = None;
     cancel_flag().store(false, Ordering::SeqCst);
@@ -97,7 +96,7 @@ pub fn test(app: &AppHandle, root: &Path) -> Result<Value, String> {
     out
 }
 
-fn test_inner(app: &AppHandle, root: &Path) -> Result<Value, String> {
+fn test_inner(app: &AppHandle, root: &Path, log: &Path) -> Result<Value, String> {
     if !paths::runtime_ready(root) {
         return Err(crate::i18n::t("s.stsRecordNeedRuntime"));
     }
@@ -139,7 +138,7 @@ fn test_inner(app: &AppHandle, root: &Path) -> Result<Value, String> {
     let errfile = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(crate::logging::daily_path(root, crate::logging::CH_STS))
+        .open(log)
         .ok();
 
     let mut cmd = Command::new(&py);
@@ -214,9 +213,11 @@ fn test_inner(app: &AppHandle, root: &Path) -> Result<Value, String> {
             // 电平原样转发。界面上那根条要跟得上说话，任何抽稀都会让它变呆。
             "level" => emit(app, "level", peak, sec, ""),
             "error" => {
-                let code = v.get("code").and_then(|x| x.as_str()).unwrap_or("");
-                let msg = v.get("message").and_then(|x| x.as_str()).unwrap_or("");
-                fail = Some(message_for(code, msg));
+                let mut v = v.clone();
+                if let Some(key) = v.get("code").and_then(|x| x.as_str()).and_then(message_key) {
+                    v["message_code"] = json!(key);
+                }
+                fail = Some(crate::diagnostics::worker_error(fabric_diagnostics::Feature::Recording, &v));
             }
             _ => {}
         }
@@ -231,9 +232,10 @@ fn test_inner(app: &AppHandle, root: &Path) -> Result<Value, String> {
     // worker 崩在 JSON 之外（import 炸了、PortAudio 直接把进程带走）时一行
     // 都收不到。不看退出码的话，这里会拿着 top = -90 的初值报「没听到声音」，
     // 把一次崩溃说成一只坏麦，用户会去换麦克风。
-    let ok = status.map(|s| s.success()).unwrap_or(false);
-    if !ok && label.is_empty() {
-        return Err(crate::i18n::t("s.micErrOpen"));
+    let status = status.map_err(|error| error.to_string())?;
+    if !status.success() {
+        return Err(crate::diagnostics::worker_error(fabric_diagnostics::Feature::Recording,
+            &json!({"message":crate::i18n::t("s.micErrOpen"),"exit_code":status.code()})));
     }
 
     let heard = top >= HEARD_PEAK_DB;
@@ -273,7 +275,7 @@ mod tests {
     /// 界面上一个「测试失败」加一片空白，比一句中文还难查。
     #[test]
     fn an_unknown_code_falls_back_to_the_worker_message() {
-        assert_eq!(message_for("weird", "打不开麦克风"), "打不开麦克风");
-        assert!(!message_for("weird", "").is_empty());
+        assert_eq!(message_key("busy"), Some("s.micErrBusy"));
+        assert_eq!(message_key("weird"), None);
     }
 }

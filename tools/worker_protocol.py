@@ -146,6 +146,32 @@ def write_status(**fields: Any) -> None:
             and cur.get("message_code")
         ):
             fields = {**fields, "message_code": ""}
+        if fields.get("state") == "error" or fields.get("error"):
+            import sys
+            import traceback
+            import uuid
+            seq = fields.get("last_cmd_seq", cur.get("last_cmd_seq", 0))
+            same = (cur.get("state") == "error" and cur.get("error") == fields.get("error")
+                    and cur.get("error_request_id") == seq)
+            fields.setdefault("error_id", cur.get("error_id") if same else uuid.uuid4().hex)
+            fields["error_request_id"] = seq
+            if not same:
+                cur.pop("diagnostic", None)
+                fields["traceback"] = ""
+                fields["os_error"] = None
+            if sys.exc_info()[0]:
+                fields["traceback"] = traceback.format_exc()
+                fields["os_error"] = getattr(sys.exc_info()[1], "winerror", None)
+            previous = cur.get("message_code", "")
+            operation = {"vc.opening_stream": "device_open", "vc.loading_model": "model_load",
+                         "vc.loading_net": "model_load", "vc.loading_hubert": "model_load",
+                         "vc.swapping": "model_load", "engine.importing": "dependency_import"}.get(previous)
+            fields.setdefault("stage", previous)
+            if not same:
+                fields.setdefault("context", {"operation": operation, "retry_safe": False})
+        elif "state" in fields and fields["state"] != "error":
+            for key in ("diagnostic", "error_id", "traceback", "os_error", "context", "stage"):
+                cur.pop(key, None)
         cur.update(fields)
         cur["ts"] = time.time()
         _write_json(STATUS_PATH, cur)
@@ -161,6 +187,9 @@ def write_sts(**fields: Any) -> None:
     与 write_status 不同，这里**不**合并：离线转换是一次性任务，上一轮的
     files / skipped / error 留到下一轮只会让界面读到上次的结果。每次全量写。
     """
+    if fields.get("phase") in ("error", "skip"):
+        import uuid
+        fields.setdefault("error_id", uuid.uuid4().hex)
     fields["ts"] = time.time()
     _write_json(STS_PATH, fields)
 

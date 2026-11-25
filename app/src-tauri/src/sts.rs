@@ -465,6 +465,7 @@ fn emit_full_ex(
     if let Some(o) = run_owner() {
         body["owner"] = json!(o);
     }
+    let body = crate::diagnostics::event(body, fabric_diagnostics::Feature::VoiceChange);
     *LAST_PROGRESS.lock().unwrap_or_else(|e| e.into_inner()) = Some(body.clone());
     if QUIET.load(Ordering::SeqCst) {
         return;
@@ -878,7 +879,9 @@ pub fn record(app: &AppHandle, root: &Path, input: &str) -> Result<Value, String
         crate::logging::CH_STS,
         &json!({ "kind": "record", "input": input }),
     );
-    let result = record_inner(app, root, input);
+    let log_slice = crate::diagnostics::LogSlice::start(&log);
+    let result = record_inner(app, root, input, &log)
+        .map_err(|raw| log_slice.finish(fabric_diagnostics::Feature::Recording, raw));
     match &result {
         Ok(v) => {
             let file = v.get("file").and_then(|x| x.as_str()).unwrap_or("");
@@ -931,10 +934,10 @@ fn emit_record(app: &AppHandle, phase: &str, db: Option<f64>, sec: Option<f64>, 
     if let Some(v) = sec {
         body["sec"] = json!(v);
     }
-    let _ = app.emit("sts-record", body);
+    let _ = app.emit("sts-record", crate::diagnostics::event(body, fabric_diagnostics::Feature::Recording));
 }
 
-fn record_inner(app: &AppHandle, root: &Path, input: &str) -> Result<Value, String> {
+fn record_inner(app: &AppHandle, root: &Path, input: &str, log: &Path) -> Result<Value, String> {
     if !paths::runtime_ready(root) {
         return Err(crate::i18n::t("s.stsRecordNeedRuntime"));
     }
@@ -988,7 +991,7 @@ fn record_inner(app: &AppHandle, root: &Path, input: &str) -> Result<Value, Stri
     let errfile = OpenOptions::new()
         .create(true)
         .append(true)
-        .open(crate::logging::daily_path(root, crate::logging::CH_STS))
+        .open(log)
         .ok();
 
     let mut cmd = Command::new(&py);
@@ -1058,7 +1061,7 @@ fn record_inner(app: &AppHandle, root: &Path, input: &str) -> Result<Value, Stri
                     sec_out = s;
                 }
             }
-            "error" => fail = Some(msg.to_string()),
+            "error" => fail = Some(crate::diagnostics::worker_error(fabric_diagnostics::Feature::Recording, &v)),
             _ => {}
         }
     }
@@ -1226,6 +1229,7 @@ struct Resident {
     /// 读取线程那边送过来的 stdout 行。
     rx: std::sync::mpsc::Receiver<String>,
     root: PathBuf,
+    stderr_path: PathBuf,
     /// 上一批结束的时间，空闲回收按它算。
     last: std::time::Instant,
     /// 拉起这个进程时的 spawn 策略指纹（accel_backend|main_gpu）。
@@ -1424,6 +1428,7 @@ fn run_hot(
         }
         let v = crate::protocol::read_sts(root);
         let ts = v.get("ts").and_then(|x| x.as_f64()).unwrap_or(0.0);
+        if v["request_id"].as_u64().is_some_and(|id| id != seq) { continue; }
         if ts > last_ts {
             last_ts = ts;
             last_change = std::time::Instant::now();
@@ -1507,11 +1512,8 @@ fn forward_sts_event(
                     msg.to_string()
                 })));
             }
-            return Some(Err(HotError::Failed(if msg.is_empty() {
-                crate::i18n::t("s.stsHotFailed").into()
-            } else {
-                msg.to_string()
-            })));
+            return Some(Err(HotError::Failed(crate::diagnostics::worker_error(
+                fabric_diagnostics::Feature::VoiceChange, v))));
         }
         "cancelled" => {
             return Some(Err(HotError::Failed(
@@ -1531,7 +1533,7 @@ fn forward_sts_event(
             let skipped: Vec<Value> = v
                 .get("skipped")
                 .and_then(|x| x.as_array())
-                .cloned()
+                .map(|a| a.iter().map(|item| crate::diagnostics::failed_item(item.clone(), fabric_diagnostics::Feature::VoiceChange)).collect())
                 .unwrap_or_default();
             emit_full(
                 app,
@@ -1555,11 +1557,8 @@ fn forward_sts_event(
             })));
         }
         "skip" => {
-            let reason = v
-                .get("reason")
-                .and_then(|x| x.as_str())
-                .filter(|s| !s.is_empty())
-                .unwrap_or(msg);
+            let item = crate::diagnostics::worker_error(fabric_diagnostics::Feature::VoiceChange, v);
+            let reason = item.as_str();
             emit_full_ex(
                 app, "skip", done, total, msg, pct, step, current, ok_n, skip_n, file,
                 Some(reason), path, Some(tag),
@@ -1655,6 +1654,7 @@ pub fn run(
             .and_then(|s| s.to_str())
             .unwrap_or("sts")
     );
+    let log_slice = crate::diagnostics::LogSlice::start(&log_path);
     let mut job = StsLog::new(log_path.clone());
     let result = run_inner(
         app,
@@ -1669,7 +1669,7 @@ pub fn run(
         &opts,
         &manifest,
         &mut job,
-    );
+    ).map_err(|raw| log_slice.finish(fabric_diagnostics::Feature::VoiceChange, raw));
     match &result {
         Ok(v) => {
             if let Some(arr) = v.get("files").and_then(|x| x.as_array()) {
@@ -1823,6 +1823,7 @@ fn run_inner(
     // 先把请求递给还活着的那个进程；递不进去（管道断了 = 它其实已经不行了）
     // 就当没有，老老实实起一个新的。路线文案要等这一步有结果了才发。
     let mut sess = take_resident(root);
+    let mut request_log = sess.as_ref().map(|r| crate::diagnostics::LogSlice::start(&r.stderr_path));
     if let Some(r) = sess.as_mut() {
         use std::io::Write;
         let line = format!("{}\n", req.display());
@@ -1857,6 +1858,7 @@ fn run_inner(
         Some(r) => r,
         None => {
             let py = paths::runtime_pythonw(root).ok_or(crate::i18n::t("s.47e57cab60"))?;
+            request_log = Some(crate::diagnostics::LogSlice::start(&job.trace.path));
             let errfile = OpenOptions::new()
                 .create(true)
                 .append(true)
@@ -1925,6 +1927,7 @@ fn run_inner(
                 stdin,
                 rx,
                 root: root.to_path_buf(),
+                stderr_path: job.trace.path.clone(),
                 last: std::time::Instant::now(),
                 fingerprint: crate::worker::spawn_fingerprint_for(&env, &py),
                 _guard: guard,
@@ -2016,11 +2019,8 @@ fn run_inner(
                 total = v.get("total").and_then(|x| x.as_u64()).unwrap_or(total).max(1);
                 let done = v.get("done").and_then(|x| x.as_u64()).unwrap_or(0);
                 // 优先用 worker 的 reason 字段，避免列表里叠成「name — 跳过 name：…」。
-                let reason = v
-                    .get("reason")
-                    .and_then(|x| x.as_str())
-                    .filter(|s| !s.is_empty())
-                    .unwrap_or(msg);
+                let item = crate::diagnostics::worker_error(fabric_diagnostics::Feature::VoiceChange, &v);
+                let reason = item.as_str();
                 if let Some(fname) = file {
                     // file 与终端 skipped 清单同形（全路径），name 只留文件名；
                     // 同名文件靠全路径区分，重试匹配也用它。
@@ -2057,7 +2057,7 @@ fn run_inner(
                 }
                 if let Some(arr) = v.get("skipped").and_then(|x| x.as_array()) {
                     // 终态清单为准；过程中 skip 事件可能已塞过。
-                    skipped = arr.clone();
+                    skipped = arr.iter().map(|item| crate::diagnostics::failed_item(item.clone(), fabric_diagnostics::Feature::VoiceChange)).collect();
                 }
                 if let Some(arr) = v.get("results").and_then(Value::as_array) {
                     results = arr.clone();
@@ -2067,20 +2067,8 @@ fn run_inner(
                 // 收尾那条 done 在 child.wait() 和错误判定之后发。
             }
             "error" => {
-                fail = Some(msg.to_string());
-                // 错误也要走事件推一遍，且带上 message_code —— 有些码在前端配了
-                // 动作按钮（「选到训练存档」配「打开训练窗」）。invoke 的 Err 只
-                // 剩纯文本，码丢了按钮就没了。
-                let mut body = json!({
-                    "phase": "error",
-                    "message": msg,
-                    "done": v.get("done").and_then(|x| x.as_u64()).unwrap_or(0),
-                    "total": total,
-                });
-                if let Some(c) = v.get("message_code").and_then(|x| x.as_str()) {
-                    body["message_code"] = json!(c);
-                }
-                let _ = app.emit("sts-progress", body);
+                fail = Some(crate::diagnostics::worker_error(fabric_diagnostics::Feature::VoiceChange, &v));
+                // The outer run emits the final diagnostic after stderr is collected.
             }
             // 常驻进程说「这批收尾了、我还活着」。done / error 都在它前面，
             // 所以走到这里该收的都收齐了。
@@ -2092,6 +2080,16 @@ fn run_inner(
         }
     }
 
+    // Capture only this request before returning the resident to the pool.
+    // A reused child still writes stderr to its original descriptor.
+    if reused {
+        if let Some(slice) = request_log.as_ref() {
+            match slice.text() {
+                Ok(text) => crate::logging::append_file(&job.trace.path, &text),
+                Err(error) => crate::logging::append_file(&job.trace.path, &format!("stderr unavailable: {error}")),
+            }
+        }
+    }
     // 还活着就放回池子给下一次用；死了才有退出码可判。
     let exit = if alive {
         keep_resident(sess);

@@ -1,6 +1,7 @@
+import { diagnosticOf, errorSummary } from "../lib/diagnostics";
 import { DockableModal, TransferProgress } from "trm-ui";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { invoke, invokeFor } from "../lib/invoke";
+import { listen } from "../lib/listen";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   cancelProvision,
@@ -36,7 +37,7 @@ function formatBytes(n: number): string {
 }
 
 function isCancelError(error: string, cancelled: string): boolean {
-  return error.includes(cancelled) || error.toLowerCase().includes("cancel");
+  return diagnosticOf(error)?.code === "diag.cancelled" || error === cancelled;
 }
 
 export function ProvisionGate({
@@ -179,7 +180,7 @@ export function ProvisionGate({
       } else if (step === "vcredist" || step === "vbcable") {
         await invoke("assets_ensure_" + step);
         setProgress({ phase: "installing", done: 0, total: 0, percent: 0 });
-        await invoke(step === "vcredist" ? "vcredist_install" : "assets_install_vbcable");
+        await invokeFor("provision", step === "vcredist" ? "vcredist_install" : "assets_install_vbcable");
         const willNeedRestart = restartNeeded || step === "vbcable";
         if (step === "vbcable") setRestartNeeded(true);
         if (pending.length <= 1 && !willNeedRestart && minRef.current) {
@@ -231,7 +232,7 @@ export function ProvisionGate({
   const attention = error && !busy ? "error" : !busy && (pending.length > 0 || restartNeeded) ? "ready" : "idle";
   const tooltip = joinClauses([
     title,
-    busy ? message : error ? error : pending.length > 0 || restartNeeded ? t("s.setupNextStep") : "",
+    busy ? message : error ? errorSummary(error, "provision") : pending.length > 0 || restartNeeded ? t("s.setupNextStep") : "",
     percent !== undefined ? `${Math.round(percent)}%` : "",
     busy && downloading && progress?.speed_bps ? progress.speed_label : "",
   ]);
@@ -332,7 +333,7 @@ export function ProvisionGate({
             detail={downloading && done > 0 ? (total > 1 ? formatBytes(done) + " / " + formatBytes(total) : formatBytes(done)) : undefined}
           />
         ) : null}
-        {!busy && error ? <ErrorNote text={error} compact /> : null}
+        {!busy && error ? <ErrorNote feature="provision" text={error} compact /> : null}
         <div className="flex items-center gap-2 justify-end mt-5">
           {busy ? (
             <>

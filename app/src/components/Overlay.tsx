@@ -1,8 +1,9 @@
+import { errorSummary } from "../lib/diagnostics";
 import { useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../lib/invoke";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getEngineStatus, startVc, stopVc, setHot } from "../lib/engine";
-import { listen } from "@tauri-apps/api/event";
+import { listen } from "../lib/listen";
 import { currentVoice } from "../lib/voices";
 import { displayVoiceName } from "../lib/voiceDisplay";
 import { useI18n } from "../i18n";
@@ -177,9 +178,9 @@ export function Overlay() {
               data-tauri-drag-region
               className="truncate text-[12.5px] font-semibold leading-tight"
               style={{ color: "#eef2f7" }}
-              title={error || label}
+              title={error ? errorSummary(error, "realtimevoicechange") : label}
             >
-              {error || label}
+              {error ? errorSummary(error, "realtimevoicechange") : label}
             </div>
             {/* 电平条使用 transform，避免每次更新宽度时触发布局。 */}
             <div

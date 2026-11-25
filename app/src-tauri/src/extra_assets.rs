@@ -575,7 +575,7 @@ pub fn download(app: &AppHandle, root: &Path, key: &str) -> Result<Value, String
     cancel.store(false, Ordering::SeqCst);
     let r = download_inner(app, root, key, cancel);
     if let Err(ref e) = r {
-        let _ = app.emit(
+        let _ = crate::diagnostics::emit(&app, 
             "extra-progress",
             json!({ "key": key, "phase": "error", "message": e }),
         );
@@ -643,7 +643,7 @@ fn download_inner(
         before += f.size_bytes;
     }
 
-    let _ = app.emit(
+    let _ = crate::diagnostics::emit(&app, 
         "extra-progress",
         json!({ "key": key, "phase": "done", "done": total.max(1),
                 "total": total.max(1), "message": &crate::i18n::t("s.4bbcf94739") }),

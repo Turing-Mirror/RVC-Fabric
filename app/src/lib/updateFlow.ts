@@ -7,7 +7,8 @@
  * - `dismiss` 只关闭提示，不更新、不打断当前任务。
  */
 import { useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "./invoke";
+import { diagnosticOf, errorText, errorWithTitle } from "./diagnostics";
 import { t } from "../i18n/t";
 
 /** `update_check` 的返回。字段名和 `update::decide` 里那个 json! 一一对应。 */
@@ -84,7 +85,7 @@ export function useUpdateFlow() {
       if (!b?.installed) {
         // 更新器跑完但没装上（取消/校验不过）：这是终态失败，不是
         // 「正在更新」—— 抛出去让 runInstall 复位 working、留可重试的错误。
-        throw new Error(t("s.3d1fde4601"));
+        throw new Error(errorWithTitle("", "s.3d1fde4601", "update"));
       }
       setLine(t("s.995e0f4c81", { v0: String(b.version ?? r.remote) }));
       return { restart: b.restart_required !== false };
@@ -118,7 +119,7 @@ export function useUpdateFlow() {
         }
       }
     } catch (e) {
-      setLine(t("s.ac3a85a9c1", { v0: String(e) }));
+      setLine(errorWithTitle(e, "s.updateCheckFailed", "update"));
     } finally {
       busyRef.current = false;
       setBusy(false);
@@ -143,8 +144,10 @@ export function useUpdateFlow() {
       // 装完就是终态：提示条停回可点状态，不能永远显示「正在更新」。
       setWorking(false);
     } catch (e) {
-      const detail = e instanceof Error ? e.message : String(e);
-      const msg = t("s.bac68ea7db", { v0: detail });
+      const existing = diagnosticOf(e) ?? (e instanceof Error ? diagnosticOf(e.message) : undefined);
+      const msg = existing?.title.key === "s.3d1fde4601"
+        ? errorText(existing)
+        : errorWithTitle(e, "s.updateInstallFailed", "update");
       setLine(msg);
       setError(msg);
       setWorking(false);

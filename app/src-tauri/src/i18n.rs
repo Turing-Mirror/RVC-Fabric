@@ -184,6 +184,7 @@ pub fn t_vars(key: &str, vars: &HashMap<String, String>) -> String {
 /// `{name}`, and first `{}`.
 pub fn te(key: &str, e: &impl std::fmt::Display) -> String {
     let v = e.to_string();
+    if crate::diagnostics::decode(&v).is_some() { return v; }
     t(key)
         .replace("{e}", &v)
         .replace("{a0}", &v)
@@ -198,6 +199,7 @@ pub fn te(key: &str, e: &impl std::fmt::Display) -> String {
 pub fn t2(key: &str, a0: &impl std::fmt::Display, a1: &impl std::fmt::Display) -> String {
     let v0 = a0.to_string();
     let v1 = a1.to_string();
+    if crate::diagnostics::decode(&v1).is_some() { return v1; }
     let mut s = t(key).replace("{a0}", &v0).replace("{a1}", &v1);
     s = s.replacen("{}", &v0, 1);
     s = s.replacen("{}", &v1, 1);

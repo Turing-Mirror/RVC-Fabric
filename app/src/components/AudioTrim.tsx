@@ -1,5 +1,8 @@
+import { ErrorNote } from "./ErrorNote";
 import { useEffect, useRef, useState } from "react";
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import { invokeFor } from "../lib/invoke";
+import { errorWithTitle } from "../lib/diagnostics";
 import { Btn } from "./ui";
 import { useI18n } from "../i18n";
 import { SegmentControl } from "./SegmentControl";
@@ -100,12 +103,12 @@ export function AudioTrimEditor({ input, disabled, onApply, onBusyChange }: Audi
     releaseAudio(audio.current);
     setPlaying(false);
     try {
-      const output = await invoke<string>(mode === "keep" ? "audio_trim" : "audio_cut", mode === "keep"
+      const output = await invokeFor<string>("other", mode === "keep" ? "audio_trim" : "audio_cut", mode === "keep"
         ? { input, start, end }
         : { input, start, end, duration });
       if (request === generation.current) onApply(output);
     } catch (e) {
-      if (request === generation.current) setError(String(e));
+      if (request === generation.current) setError(errorWithTitle(e, "neptune.trimFailed", "other"));
     } finally {
       setBusy(false);
       onBusyChange?.(false);
@@ -122,7 +125,7 @@ export function AudioTrimEditor({ input, disabled, onApply, onBusyChange }: Audi
           setEnd((v) => v || d);
         }
       }}
-      onError={() => { previewing.current = false; setPlaying(false); setError(t("neptune.previewFailed")); }}
+      onError={() => { previewing.current = false; setPlaying(false); setError(errorWithTitle("", "neptune.previewFailed", "other")); }}
       onEnded={() => { previewing.current = false; setPlaying(false); }}
       onPlay={() => setPlaying(true)}
       onPause={() => setPlaying(false)}
@@ -168,17 +171,17 @@ export function AudioTrimEditor({ input, disabled, onApply, onBusyChange }: Audi
           if (!audio.current.hasAttribute("src")) audio.current.src = source;
           audio.current.currentTime = start;
           setCurrentTime(start);
-          void audio.current.play().catch(() => {
+          void audio.current.play().catch((error) => {
             if (request !== generation.current) return;
             previewing.current = false;
             setPlaying(false);
-            setError(t("neptune.previewFailed"));
+            setError(errorWithTitle(error, "neptune.previewFailed", "other"));
           });
         }
       }}>{t("neptune.previewSelection")}</Btn>
       <Btn busy={busy} disabled={!canApply || disabled} onClick={() => void apply()}>{t(busy ? "neptune.trimming" : "neptune.applyTrim")}</Btn>
     </div>
-    <p className="m-0 text-[12.5px] text-[var(--help)]">{error || (removingEverything && mode === "remove" ? t("neptune.selectionInvalid") : duration > 0 && !valid ? t("neptune.trimInvalid") : null)}</p>
+    {error ? <ErrorNote text={error} feature="other" /> : <p className="m-0 text-[12.5px] text-[var(--help)]">{removingEverything && mode === "remove" ? t("neptune.selectionInvalid") : duration > 0 && !valid ? t("neptune.trimInvalid") : null}</p>}
   </div>;
 }
 

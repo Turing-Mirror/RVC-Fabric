@@ -24,7 +24,9 @@ describe("storage feedback", () => {
     });
     m = mount(<StorageSection />); await tick();
     expect(m.container.textContent).toContain("3.0 KB");
-    expect(m.container.querySelector('[role="alert"]')?.textContent).toBe(t("s.storageScanFailed"));
+    const alert = m.container.querySelector('[role="alert"]');
+    expect(alert?.querySelector("p")?.textContent).toBe(t("s.storageScanFailed"));
+    expect(alert?.textContent).not.toContain(t("diag.title.training"));
   });
   it("counts update cache in temporary cleanup and retains success when refresh fails", async () => {
     m = mount(<StorageSection />); await tick();
@@ -39,7 +41,9 @@ describe("storage feedback", () => {
     await act(async () => apply.click()); await tick();
     expect(mocks.invoke).toHaveBeenCalledWith("storage_clean", { kinds: ["temp"] });
     expect(m.container.textContent).toContain(t("s.cleanDone", { size: "3.0 KB" }));
-    expect(m.container.querySelector('[role="alert"]')?.textContent).toBe(t("s.storageScanFailed"));
+    const alert = m.container.querySelector('[role="alert"]');
+    expect(alert?.querySelector("p")?.textContent).toBe(t("s.storageScanFailed"));
+    expect(alert?.textContent).not.toContain(t("diag.title.training"));
     expect(check.checked).toBe(false);
     expect(apply.disabled).toBe(true);
   });

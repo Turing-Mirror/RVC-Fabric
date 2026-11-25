@@ -121,7 +121,8 @@ fn cover_body(request: RequestBuilder, bytes: &[u8]) -> ApiResult<RequestBuilder
 }
 
 #[tauri::command]
-pub async fn community_publication(request: PublicationRequest) -> ApiResult {
+pub async fn community_publication(request: PublicationRequest) -> Result<Value, Value> {
+    let result: ApiResult = async {
     let base = community_catalog::publication_base()?;
     let client = Client::builder()
         .timeout(Duration::from_secs(45))
@@ -252,4 +253,6 @@ pub async fn community_publication(request: PublicationRequest) -> ApiResult {
         failure.details = json!({ "retryAfter": seconds });
     }
     Err(failure)
+    }.await;
+    result.map_err(|error| crate::diagnostics::api_error("community_publication", error))
 }

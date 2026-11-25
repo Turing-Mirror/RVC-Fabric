@@ -1,5 +1,6 @@
+import { errorText, errorSummary, errorWithTitle } from "../lib/diagnostics";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../lib/invoke";
 import {
   ensureEngine,
   getEngineStatus,
@@ -162,9 +163,9 @@ export function useEngine() {
       }
       setStatus(st);
       if (st.mic_bridge_error === true) {
-        setLastError(t("audio.microphoneBridgeFailed"));
+        setLastError(errorWithTitle("", "audio.microphoneBridgeFailed", "realtimevoicechange"));
       } else if (st.state === "error" && st.error) {
-        setLastError(String(st.error));
+        setLastError(errorText(st.diagnostic ?? st.error));
       } else if (st.state === "running") {
         if (!manualErr.current || manualErr.current.until <= Date.now()) {
           manualErr.current = null;
@@ -413,9 +414,15 @@ export function useEngine() {
         // 补 swap 还是报错，不许拿启动前的快照猜。
         if (startOp) settleStart(startOp, st);
         if (st.state === "error" && st.error) {
-          setLastError(String(st.error));
+          setLastError(errorText(st.diagnostic ?? st.error));
         } else if (st.state !== "running") {
-          setLastError(String(st.error || st.message || t("msg.vc.need_model")));
+          setLastError(
+            st.diagnostic
+              ? errorText(st.diagnostic)
+              : st.error || st.message
+                ? errorText(st.error || st.message)
+                : errorWithTitle("", "msg.vc.need_model", "realtimevoicechange"),
+          );
         } else {
           setLastError("");
         }
@@ -481,7 +488,7 @@ export function useEngine() {
     try {
       const st = await listDevices();
       setStatus(st);
-      if (st.state === "error" && st.error) setLastError(String(st.error));
+      if (st.state === "error" && st.error) setLastError(errorText(st.diagnostic ?? st.error));
     } catch (e) {
       setLastError(String(e));
     } finally {
@@ -573,7 +580,7 @@ export function useEngine() {
       : status;
 
   const sub =
-    lastError ||
+    (lastError ? errorSummary(lastError, "realtimevoicechange") : "") ||
     (provision.need_provision
       ? String(provision.message || t("s.d725011356"))
       : statusSub(hinted));

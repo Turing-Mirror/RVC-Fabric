@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../lib/invoke";
 import { fetchPlaza, type PlazaFeed } from "../lib/plaza";
 import { useI18n } from "../i18n";
 

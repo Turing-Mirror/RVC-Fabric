@@ -3871,6 +3871,10 @@ if __name__ == "__main__":
             try:
                 from tools.worker_protocol import write_sts
 
+                fields["request_id"] = getattr(self, "_sts_seq", 0)
+                if fields.get("phase") in ("error", "skip") and sys.exc_info()[0]:
+                    fields.setdefault("detail", traceback.format_exc())
+                    fields.setdefault("os_error", getattr(sys.exc_info()[1], "winerror", None))
                 write_sts(**fields)
             except Exception:
                 traceback.print_exc()

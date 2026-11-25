@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../lib/invoke";
 import { TextArea, TextInput } from "trm-ui";
 import { Btn } from "./ui";
 import { Toggle } from "./controls";

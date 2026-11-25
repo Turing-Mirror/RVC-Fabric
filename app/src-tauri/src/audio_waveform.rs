@@ -250,7 +250,8 @@ pub async fn audio_waveform_get(
     state: State<'_, Mutex<crate::AppState>>,
     input: String,
     request_id: String,
-) -> Result<Waveform, String> {
+) -> Result<Waveform, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     if request_id.is_empty()
         || request_id.len() > 80
         || !request_id
@@ -277,6 +278,9 @@ pub async fn audio_waveform_get(
         .unwrap_or_else(|e| e.into_inner())
         .remove(&request_id);
     result.map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("audio_waveform_get", error))
 }
 
 #[tauri::command]

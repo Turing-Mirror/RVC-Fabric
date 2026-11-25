@@ -1,4 +1,5 @@
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import { invoke } from "./invoke";
 import type { Config } from "./config";
 import { NEUTRAL_TONE, sampleWallpaper } from "trm-ui";
 

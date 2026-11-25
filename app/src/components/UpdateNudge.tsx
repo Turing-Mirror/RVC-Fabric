@@ -1,3 +1,4 @@
+import { ErrorNote } from "./ErrorNote";
 import { Nudge } from "./Nudge";
 import { Btn } from "./ui";
 import { t } from "../i18n/t";
@@ -69,7 +70,7 @@ export function UpdateNudge({
     >
       {working
         ? line
-        : error ||
+        : error ? <ErrorNote text={error} feature="update" /> :
           t("s.3956a2d8bb", {
             v0: offer.local,
             v1: offer.notes || t("s.58941d30b7"),

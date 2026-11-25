@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invokeFor } from "./invoke";
 import { AUTHOR_URL_LABEL_LIMIT, isSha256, newDraft, providerHash, publication, validUrl, type Draft, type Source, type SourceFile } from "./communityPublication";
 
 export type Pack = {
@@ -10,8 +10,8 @@ export type BatchRow = { draft: Draft; submitted?: boolean; error?: string };
 export type BatchDraft = { id: string; url: string; revision: string; shared: Draft; rows: Record<string, BatchRow> };
 
 export const newBatch = (): BatchDraft => ({ id: crypto.randomUUID(), url: "", revision: "", shared: newDraft(), rows: {} });
-export const choosePacks = () => invoke<Pack[]>("publication_read_packs");
-export const chooseManifest = () => invoke<Pack[] | null>("publication_read_manifest");
+export const choosePacks = () => invokeFor<Pack[]>("importexport", "publication_read_packs");
+export const chooseManifest = () => invokeFor<Pack[] | null>("importexport", "publication_read_manifest");
 
 export function matchesSnapshot(draft: Draft, source: Source, file: SourceFile) {
   const old = draft.selection;

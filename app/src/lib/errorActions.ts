@@ -7,7 +7,7 @@
  * 这张表只登记**当前进程就能完成、且有明确成功反馈**的动作。做不到的宁可不
  * 登记：一个点下去什么都没发生的按钮，比没有按钮更伤。
  */
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "./invoke";
 import { openDownloadModels } from "./downloadModels";
 import type { ExtrasFilter } from "../components/ExtrasDialog";
 import { t } from "../i18n/t";
@@ -15,19 +15,17 @@ import { t } from "../i18n/t";
 type Action = {
   /** 按钮文案的语言包 key。 */
   labelKey: string;
-  run: () => void;
+  run: () => Promise<unknown>;
 };
 
 /** 去主窗口广场的下载区，带上分组筛选。工具窗里也管用（会把主窗口叫到前面）。 */
-function toDownloads(reason: string, filter: ExtrasFilter): () => void {
+function toDownloads(reason: string, filter: ExtrasFilter): () => Promise<unknown> {
   return () => openDownloadModels({ reason, filter });
 }
 
 /** 跳到说明页对应段。 */
-function toHelp(section: string): () => void {
-  return () => {
-    void invoke("tools_open_help", { section }).catch(() => {});
-  };
+function toHelp(section: string): () => Promise<unknown> {
+  return () => invoke("tools_open_help", { section });
 }
 
 const CODE_ACTIONS: Record<string, Action> = {
@@ -81,14 +79,12 @@ const CODE_ACTIONS: Record<string, Action> = {
   // 错的人显然已经有整套训练环境；也避免组件间的循环引用。
   "sts.model_is_archive": {
     labelKey: "s.errActExtract",
-    run: () => {
-      void invoke("tools_open", { kind: "train" }).catch(() => {});
-    },
+    run: () => invoke("tools_open", { kind: "train" }),
   },
 };
 
 /** 这个错误码有没有配一个能按的按钮。 */
-export function actionFor(code: string | undefined | null): { label: string; run: () => void } | null {
+export function actionFor(code: string | undefined | null): { label: string; run: () => Promise<unknown> } | null {
   if (!code) return null;
   const a = CODE_ACTIONS[code];
   if (!a) return null;

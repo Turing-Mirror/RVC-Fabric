@@ -1,5 +1,7 @@
+import { ErrorNote } from "./ErrorNote";
+import { diagnosticOf, errorWithTitle } from "../lib/diagnostics";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invokeFor } from "../lib/invoke";
 import { Block, Btn } from "./ui";
 import { Ring, type RingSegment } from "./Ring";
 import { CatalogTransition } from "./CatalogTransition";
@@ -73,7 +75,7 @@ function human(n: number): string {
 export function StorageSection() {
   const { t } = useI18n();
   const request = useRef(0);
-  const [scanError, setScanError] = useState(false);
+  const [scanError, setScanError] = useState("");
   const [usage, setUsage] = useState<Usage | null>(null);
   const [rows, setRows] = useState<Row[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -91,9 +93,9 @@ export function StorageSection() {
   const scan = async () => {
     const current = ++request.current;
     setBusy(true);
-    setScanError(false);
+    setScanError("");
     const [u, r] = await Promise.allSettled([
-      invoke<Usage>("storage_usage"), invoke<Row[]>("train_cleanup_scan"),
+      invokeFor<Usage>("other", "storage_usage"), invokeFor<Row[]>("other", "train_cleanup_scan"),
     ]);
     if (current !== request.current) return;
     if (u.status === "fulfilled") setUsage(u.value);
@@ -101,7 +103,13 @@ export function StorageSection() {
       setRows(Array.isArray(r.value) ? r.value : []);
       setPage(1);
     }
-    setScanError(u.status === "rejected" || r.status === "rejected");
+    setScanError(
+      u.status === "rejected"
+        ? errorWithTitle(u.reason, "s.storageScanFailed", "other")
+        : r.status === "rejected"
+          ? errorWithTitle(r.reason, "s.storageScanFailed", "other")
+          : "",
+    );
     setBusy(false);
   };
   useEffect(() => {
@@ -154,11 +162,11 @@ export function StorageSection() {
     let freed = 0;
     try {
       if (direct.size) {
-        freed += (await invoke<{ freed_bytes?: number }>("storage_clean", { kinds: [...direct] }))?.freed_bytes ?? 0;
+        freed += (await invokeFor<{ freed_bytes?: number }>("other", "storage_clean", { kinds: [...direct] }))?.freed_bytes ?? 0;
         setDirect(new Set());
       }
       for (const [exp, kinds] of pickedTrain) {
-        freed += (await invoke<{ freed_bytes?: number }>("train_cleanup_apply", { exp, kinds: [...kinds] }))?.freed_bytes ?? 0;
+        freed += (await invokeFor<{ freed_bytes?: number }>("other", "train_cleanup_apply", { exp, kinds: [...kinds] }))?.freed_bytes ?? 0;
         setTrain((prev) => ({ ...prev, [exp]: new Set() }));
       }
       setMsg(t("s.cleanDone", { size: human(freed) }));
@@ -179,7 +187,7 @@ export function StorageSection() {
         </Btn>
       }
     >
-      {scanError ? <p role="alert" className="m-0 mb-3 text-[12.5px] text-[var(--help)]">{t("s.storageScanFailed")}</p> : null}
+      {scanError ? <ErrorNote text={scanError} /> : null}
       <div className="bg-[var(--group)] rounded-[var(--r)] px-5 py-4">
         {usage ? (
           <Ring segments={segments} center={human(usage.total_bytes)} sub={t("s.storageTitle")} size={132} />
@@ -246,7 +254,7 @@ export function StorageSection() {
 
           <div className="mt-3 pt-3 flex items-center gap-3 shadow-[0_-1px_0_var(--hairline)]">
             <span className="text-[12.5px] text-[var(--meta)]" role="status">
-              {msg || (pickedCount ? t("s.cleanPicked", { n: pickedCount, size: human(pickedBytes) }) : t("s.cleanNonePicked"))}
+              {diagnosticOf(msg) ? <ErrorNote text={msg} /> : msg || (pickedCount ? t("s.cleanPicked", { n: pickedCount, size: human(pickedBytes) }) : t("s.cleanNonePicked"))}
             </span>
             <span className="ml-auto">
               <Btn danger onClick={() => void apply()} busy={busy} disabled={busy || pickedCount === 0}>{t("s.cleanupApply")}</Btn>

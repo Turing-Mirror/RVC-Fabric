@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { releaseAudio } from "../lib/releaseAudio";
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import { invoke, invokeFor } from "../lib/invoke";
+import { errorWithTitle } from "../lib/diagnostics";
+import { listen } from "../lib/listen";
 import { dropListen } from "../lib/tauriListen";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Icon, SearchBox, TextArea, TextInput } from "trm-ui";
@@ -1082,7 +1084,7 @@ function StsSection() {
       el.onerror = () => {
         if (audioRef.current !== el) return;
         stopPlay();
-        showErr(t("s.stsPlayFail"));
+        showErr(errorWithTitle("", "s.stsPlayFail", "voicechange"));
       };
       if (at > 0) {
         el.onloadedmetadata = () => {
@@ -1093,14 +1095,14 @@ function StsSection() {
         el.onloadedmetadata = null;
       }
       setPlaying(path);
-      void el.play().catch(() => {
+      void el.play().catch((error) => {
         if (audioRef.current !== el) return;
         stopPlay();
-        showErr(t("s.stsPlayFail"));
+        showErr(errorWithTitle(error, "s.stsPlayFail", "voicechange"));
       });
     } catch (e) {
       stopPlay();
-      showErr(String(e));
+      showErr(errorWithTitle(e, "s.stsPlayFail", "voicechange"));
     }
   };
 
@@ -1113,7 +1115,7 @@ function StsSection() {
     setRecording(true);
     try {
       // 录音存进录音目录，清单里整个目录算一条来源。
-      const folder = await invoke<string>("sts_default_input");
+      const folder = await invokeFor<string>("recording", "sts_default_input");
       const r = await invoke<{
         file?: string;
         dir?: string;
@@ -2230,7 +2232,7 @@ function StsSection() {
         </div>
       ) : null}
 
-      {msg ? <ErrorNote text={msg} error={msgErr} code={msgCode} /> : null}
+      {msg ? <ErrorNote feature="voicechange" text={msg} error={msgErr} code={msgCode} /> : null}
 
       {retryable.length && !running ? (
         <div className="mt-3">
@@ -2250,10 +2252,8 @@ function StsSection() {
                 key={`${s.file}|${s.tag ?? ""}`}
                 className="py-0.5 text-[12.5px] text-[var(--meta)] break-all"
               >
-                {t("s.itemReason", {
-                  v0: s.tag ? t("s.labelWithDetail", { v0: s.name, v1: s.tag }) : s.name,
-                  v1: s.reason,
-                })}
+                {s.tag ? t("s.labelWithDetail", { v0: s.name, v1: s.tag }) : s.name}
+                <ErrorNote text={s.reason} feature="voicechange" />
               </li>
             ))}
           </ul>
@@ -2534,11 +2534,11 @@ function TtsSection({ draft }: { draft: ReturnType<typeof useTtsDraft> }) {
               style={{ width: `${prog.total ? Math.round((prog.done / prog.total) * 100) : 0}%` }}
             />
           </div>
-          <p className="m-0 mt-2 text-[12.5px] text-[var(--meta)]">{prog.message}</p>
+          <p className="m-0 mt-2 text-[12.5px] text-[var(--meta)]">{prog.phase === "error" ? "" : prog.message}</p>
         </div>
       ) : null}
 
-      {msg ? <ErrorNote text={msg} error={msgErr} /> : null}
+      {msg ? <ErrorNote feature="tts" text={msg} error={msgErr} /> : null}
 
       <ToolActions>
         <div className="ml-auto flex items-center gap-2.5">

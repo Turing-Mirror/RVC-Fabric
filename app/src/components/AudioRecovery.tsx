@@ -1,5 +1,6 @@
+import { ErrorNote } from "./ErrorNote";
 import { useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../lib/invoke";
 import { Btn } from "./ui";
 import { Toggle } from "./controls";
 import { Nudge } from "./Nudge";
@@ -25,8 +26,8 @@ export function AudioRecoveryBanner({ status }: { status?: EngineStatus }) {
   const [dismissed, setDismissed] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const reason = String(status?.error || status?.message || "");
-  const relevant = /audio|device|portaudio|asio|声卡|设备|音频|裝置|音訊|0xc000/i.test(reason);
+  const reason = status?.diagnostic?.error_id ?? "";
+  const relevant = status?.diagnostic?.actions.some(action => action.id === "open_device_settings");
   const show = status?.state === "error" && relevant && dismissed !== reason;
   const run = async (action: string) => {
     setBusy(true); setError("");
@@ -38,7 +39,7 @@ export function AudioRecoveryBanner({ status }: { status?: EngineStatus }) {
     <Btn disabled={busy} onClick={() => setDismissed(reason)}>{t("neptune.close")}</Btn>
     <Btn disabled={busy} onClick={() => void run("check")}>{t("neptune.deviceIgnore")}</Btn>
     <Btn disabled={busy} onClick={() => void run("compatibility")}>{t("neptune.deviceCompatibility")}</Btn>
-  </>}>{error || t("neptune.deviceRecovery")}{" "}{t("neptune.compatibilityHint")}</Nudge> : null}</Leave>;
+  </>}>{error ? <ErrorNote text={error} feature="settings" /> : <ErrorNote diagnostic={status?.diagnostic} feature="realtimevoicechange" />}{" "}{t("neptune.compatibilityHint")}</Nudge> : null}</Leave>;
 }
 
 export function AudioRecoverySettings({ config }: { config: Config }) {
@@ -63,6 +64,6 @@ export function AudioRecoverySettings({ config }: { config: Config }) {
         <Btn disabled={busy} onClick={() => void run("restore", undefined, device)}>{t("neptune.deviceRestore")}</Btn>
       </div>)}
     </>}
-    {error && <p role="alert" className="m-0 text-[12.5px]">{error}</p>}
+    {error && <ErrorNote text={error} feature="settings" />}
   </div>;
 }

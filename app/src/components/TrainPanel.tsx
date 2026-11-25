@@ -1,5 +1,6 @@
+import type { TrainingCopy } from "../lib/diagnosticActions";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../lib/invoke";
 import { TextInput } from "trm-ui";
 import { activeJob, latestExperimentJob, useTrainingQueue } from "../lib/trainQueue";
 import { TrainingQueue } from "./TrainingQueue";
@@ -274,6 +275,20 @@ export function TrainPanel() {
   const [f0, setF0] = useState<(typeof F0_OPTS)[number]>("rmvpe");
   const [saveEvery, setSaveEvery] = useState(5);
   const [saveWeights, setSaveWeights] = useState(true);
+  const [copiedResume, setCopiedResume] = useState<{ exp: string; resume: boolean } | null>(null);
+  const editTrainingCopy = async ({ job_id, stage }: TrainingCopy) => {
+    const job = queue.jobs.find(job => job.id === job_id);
+    if (!job || stage !== "train") throw new Error(t("trainingQueue.Missing"));
+    const req = job.req;
+    setCopiedResume({ exp: req.exp, resume: !!req.resume });
+    setName(req.exp); setDataset(req.dataset); setSr(req.sample_rate);
+    setEpochs(req.total_epoch); setBatch(req.batch_size);
+    batchTouchedRef.current = true;
+    setSaveEvery(req.save_every ?? 5); setSaveWeights(req.save_every_weights ?? true);
+    setOutDir(req.output_dir ?? "");
+    if (F0_OPTS.includes(req.f0_method as (typeof F0_OPTS)[number])) setF0(req.f0_method as (typeof F0_OPTS)[number]);
+    await new Promise<void>(resolve => requestAnimationFrame(() => { focusBatch(); resolve(); }));
+  };
   const prog = active?.progress;
   const [msg, setMsg] = useState("");
   // 配一个能按的按钮要靠错误码，光有文案认不出来是哪一类错。
@@ -339,7 +354,7 @@ export function TrainPanel() {
 
   const existing = st.experiments?.find((e) => e.name === name.trim());
   // 有切片就能续跑，预处理是最慢的一步（几十分钟），能跳过就跳过。
-  const resume = !!existing?.resumable;
+  const resume = copiedResume?.exp === name ? copiedResume.resume : !!existing?.resumable;
   const srReady = st.pretrained?.find((p) => p.sample_rate === sr)?.ready ?? false;
   // 只有最吃显存的那档就绪：显存不够的用户没有退路，得先告诉他退路在哪。
   const readySrs = (st.pretrained || []).filter((p) => p.ready).map((p) => p.sample_rate);
@@ -818,7 +833,7 @@ export function TrainPanel() {
                       >
                         <span className="font-medium text-[var(--ink-muted)]">{f.name}</span>
                         {" — "}
-                        {f.reason}
+                        <ErrorNote text={f.reason} feature="training" />
                       </li>
                     ))}
                   </ul>
@@ -851,7 +866,7 @@ export function TrainPanel() {
         ) : null}
 
         <TrainingQueue jobs={queue.jobs} error={queue.error} loaded={queue.loaded} waitingForRealtime={queue.waitingForRealtime}
-          eta={eta} onAction={queue.action} onBatch={focusBatch} />
+          eta={eta} onAction={queue.action} onBatch={editTrainingCopy} />
 
         {trained && !running ? (
           <div className="mt-3">
@@ -862,17 +877,11 @@ export function TrainPanel() {
         ) : null}
 
         {msg ? (
-          <ErrorNote
+          <ErrorNote feature="training"
             text={msg}
             error={msgErr}
             code={msgCode}
-            extraAction={
-              // 显存不足只有一条路能走：把批大小调小。那个输入框就在这一页上，
-              // 所以这条不进 CODE_ACTIONS 表 —— 表里只放跨窗口也成立的动作。
-              msgCode === "train.oom"
-                ? { label: t("s.errActBatch"), run: focusBatch }
-                : null
-            }
+            onEditTrainingCopy={editTrainingCopy}
           />
         ) : null}
 

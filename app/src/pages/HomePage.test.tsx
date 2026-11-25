@@ -6,6 +6,7 @@
  * 没确认在用的音色不许把库里第一条画成当前、也不许给任何卡贴徽标。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act } from "react";
 import { mount, tick, type Mounted } from "../test/dom";
 
 const tauri = vi.hoisted(() => ({
@@ -58,6 +59,20 @@ describe("首页使用中徽标", () => {
     const m = mount(<HomePage currentId="" />);
     mounts.push(m);
     expect(m.container.textContent).not.toContain(t("s.starterTitle"));
+  });
+
+  it("读取音色目录失败时以 s.voicesReadFailed 为标题并保留原始详情", async () => {
+    tauri.invoke.mockImplementation((cmd) => {
+      if (cmd === "voices_list") return Promise.reject(new Error("catalog unreadable"));
+      return Promise.resolve({});
+    });
+    const m = mount(<HomePage currentId="" />);
+    mounts.push(m);
+    await tick();
+    await tick();
+    const alert = m.container.querySelector('[role="alert"]');
+    expect(alert).not.toBeNull();
+    expect(alert!.querySelector("p")?.textContent).toBe(t("s.voicesReadFailed"));
   });
 
   it("currentId 为空：不贴任何卡的「使用中」，主角位显示占位文案", async () => {
@@ -118,5 +133,26 @@ describe("首页使用中徽标", () => {
     const keys = [...m.container.querySelectorAll<HTMLElement>("[data-flip]")].map(n => n.dataset.flip);
     expect(keys).toEqual(["m/a.pth", "m/b.pth", "m/c.pth"]);
     expect(new Set(keys).size).toBe(3);
+  });
+
+  it("切换音色失败时以 home.switchFailed 为标题并保留原始详情", async () => {
+    tauri.invoke.mockImplementation((cmd) => {
+      if (cmd === "voices_list") return Promise.resolve(CATALOG);
+      if (cmd === "voices_select") return Promise.reject(new Error("switch boom"));
+      return Promise.resolve({});
+    });
+    const m = mount(<HomePage currentId="" />);
+    mounts.push(m);
+    await tick();
+    await tick();
+    const card = m.container.querySelector('button[data-flip="m/a.pth"]') as HTMLButtonElement | null;
+    expect(card).not.toBeNull();
+    await act(async () => {
+      card!.click();
+    });
+    await tick();
+    const alert = m.container.querySelector('[role="alert"]');
+    expect(alert).not.toBeNull();
+    expect(alert!.querySelector("p")?.textContent).toBe(t("home.switchFailed"));
   });
 });

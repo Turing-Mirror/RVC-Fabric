@@ -10,7 +10,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use serde_json::{json, Value};
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 
 use crate::{config, paths, provision, worker};
 
@@ -95,7 +95,7 @@ pub fn status(root: &Path) -> Value {
 }
 
 fn emit(app: &AppHandle, phase: &str, message: String, percent: u8) {
-    let _ = app.emit(
+    let _ = crate::diagnostics::emit(&app, 
         "runtime-migration-progress",
         json!({
             "phase": phase,

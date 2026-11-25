@@ -1,130 +1,26 @@
-import { useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { Btn } from "./ui";
-import { t } from "../i18n/t";
-import { actionFor } from "../lib/errorActions";
-import { splitErrorText } from "trm-ui/fabric";
+import { useMemo } from "react";
+import { ErrorNote as SharedErrorNote } from "trm-ui";
+import { actionsFor, diagnosticOf, legacyDiagnostic, contentFor, type Diagnostic, type Feature } from "../lib/diagnostics";
+import { diagnosticActions, type TrainingCopy } from "../lib/diagnosticActions";
 
-/**
- * 面板里那行报错。
- *
- * 以前是一个裸的 `<p>{msg}</p>`：一整条 traceback 直接铺在面板上，用户截图发
- * 群里，我们再从几十行 `D:\RVC Fabric\Runtime\lib\site-packages\...` 里找那句
- * 真正有用的。
- *
- * 现在正文只留真正有用的那一行（traceback 取最后一行异常，普通多行取第一行），
- * 剩下的收进「详情」。收起来有个代价 —— 群里问「报什么错」时截图会只剩一行。
- * 所以「复制完整错误」必须一按就有，完整内容一个字都不能少地进日志和诊断包。
- */
 export function ErrorNote({
-  text,
-  error = true,
-  code,
-  extraAction,
-  compact = false,
+  text, diagnostic, feature = "other", error = true, localOnly = false, extraAction, onEditTrainingCopy,
 }: {
-  text: string;
+  text?: unknown;
+  diagnostic?: Diagnostic | null;
+  feature?: Feature;
   compact?: boolean;
-  /**
-   * 这句话是报错还是结果。
-   *
-   * 面板那一格既报错也报成功（「已提取 xxx.pth」和一条 traceback 走同一个
-   * useState）。在「完成 8 个文件」底下摆一个「复制完整错误」，用户会以为
-   * 出事了。所以由面板告诉我们是哪一种，不猜。
-   */
+  localOnly?: boolean;
   error?: boolean;
-  /** worker 的 message_code，配得上按钮就多一个按钮。 */
   code?: string | null;
-  /** 面板自己才做得到的动作（比如训练窗的「模型提取」）。 */
-  extraAction?: { label: string; run: () => void } | null;
+  extraAction?: { label: string; run: () => void | Promise<unknown> } | null;
+  onEditTrainingCopy?: (request: TrainingCopy) => Promise<void>;
 }) {
-  const [open, setOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
-  if (!text) return null;
-  if (!error) {
-    return (
-      <p className="m-0 mt-3 text-[12.5px] text-[var(--ink-muted)] break-all leading-relaxed whitespace-pre-wrap">
-        {text}
-      </p>
-    );
-  }
-
-  const { head, detail, hasMore } = splitErrorText(text);
-  if (compact) {
-    return (
-      <div className="mt-3 text-[12.5px] leading-relaxed">
-        <p role="alert" className="m-0 break-words text-[var(--danger-text)]">{head}</p>
-        {hasMore ? (
-          <details className="mt-1 text-[var(--meta)]">
-            <summary className="cursor-pointer">{t("s.errDetails")}</summary>
-            <pre className="m-0 max-h-[144px] overflow-auto whitespace-pre-wrap break-all text-[11.5px]">{detail}</pre>
-          </details>
-        ) : null}
-      </div>
-    );
-  }
-  const action = extraAction ?? actionFor(code);
-
-  const done = () => {
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1600);
-  };
-  const copy = () => {
-    // 退回 execCommand 是因为「按了没反应」比没有这个按钮还伤 —— 而我们在群里
-    // 要用户复制报错的时候，正是他最不该再碰一次钉子的时候。
-    const fallback = () => {
-      try {
-        const ta = document.createElement("textarea");
-        ta.value = text;
-        ta.setAttribute("readonly", "");
-        ta.style.position = "fixed";
-        ta.style.opacity = "0";
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand("copy");
-        document.body.removeChild(ta);
-        done();
-      } catch {
-        /* 真的复制不了就别装作复制成功 */
-      }
-    };
-    try {
-      void navigator.clipboard.writeText(text).then(done).catch(fallback);
-    } catch {
-      fallback();
-    }
-  };
-
-  return (
-    <div className="mt-3">
-      <p className="m-0 text-[12.5px] text-[var(--ink-muted)] break-all leading-relaxed">
-        {head}
-      </p>
-      {open && hasMore ? (
-        <pre className="mt-1.5 mb-0 max-h-[168px] overflow-auto whitespace-pre-wrap break-all font-mono text-[11.5px] text-[var(--meta)] leading-relaxed">
-          {detail}
-        </pre>
-      ) : null}
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        {action ? (
-          <Btn primary onClick={action.run}>
-            {action.label}
-          </Btn>
-        ) : null}
-        {hasMore ? (
-          <Btn onClick={() => setOpen((v) => !v)}>
-            {open ? t("s.errDetailsHide") : t("s.errDetails")}
-          </Btn>
-        ) : null}
-        <Btn onClick={copy}>{copied ? t("s.errCopied") : t("s.errCopy")}</Btn>
-        <Btn
-          onClick={() => {
-            void invoke("reveal_user_dir", { name: "logs" }).catch(() => {});
-          }}
-        >
-          {t("s.errOpenLog")}
-        </Btn>
-      </div>
-    </div>
-  );
+  const value = useMemo(() => diagnostic ?? diagnosticOf(text) ?? legacyDiagnostic(text, feature), [diagnostic, text, feature]);
+  if (!text && !diagnostic) return null;
+  if (!error) return <p className="m-0 mt-3 text-[12.5px] text-[var(--ink-muted)] break-all leading-relaxed whitespace-pre-wrap">{String(text ?? "")}</p>;
+  if (value.code === "diag.cancelled" || value.code === "diag.recovered") return null;
+  const actions = actionsFor(value, localOnly ? {} : diagnosticActions(onEditTrainingCopy));
+  if (extraAction) actions.unshift({ label: extraAction.label, run: async () => { await extraAction.run(); } });
+  return <SharedErrorNote key={value.error_id} content={contentFor(value, feature)} actions={actions} />;
 }

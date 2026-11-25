@@ -1,4 +1,4 @@
-import { listen } from "@tauri-apps/api/event";
+import { listen } from "./lib/listen";
 import { getConfig, type Config } from "./lib/config";
 import { configSnapshot } from "./lib/configSnapshot";
 import React from "react";
@@ -11,7 +11,7 @@ import { Overlay } from "./components/Overlay";
 import { I18nProvider } from "./i18n";
 import { applyAppearance } from "./lib/appearance";
 import "./index.css";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "./lib/invoke";
 import { isBrowserKey } from "./lib/browserKeys";
 import { trackInputModality } from "./lib/inputModality";
 

@@ -22,7 +22,7 @@ use std::{
     },
     time::Duration,
 };
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, State};
 
 const VOLUME_STEPS: i16 = 10;
 /// Decoded audio kept ahead of the callback; a loop pass restarts within it.
@@ -107,8 +107,12 @@ pub fn toggle_mute(root: &Path) -> Result<AudioVolumeStatus, String> {
 #[tauri::command]
 pub fn audio_voice_volume_get(
     state: State<'_, Mutex<crate::AppState>>,
-) -> Result<AudioVolumeStatus, String> {
+) -> Result<AudioVolumeStatus, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     Ok(volume_settings(&crate::root_clone(&state)?))
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("audio_voice_volume_get", error))
 }
 
 #[tauri::command]
@@ -116,10 +120,14 @@ pub fn audio_voice_volume_adjust(
     app: AppHandle,
     state: State<'_, Mutex<crate::AppState>>,
     direction: i8,
-) -> Result<AudioVolumeStatus, String> {
+) -> Result<AudioVolumeStatus, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let status = adjust_volume(&crate::root_clone(&state)?, direction)?;
-    let _ = app.emit("audio-volume://changed", status);
+    let _ = crate::diagnostics::emit(&app, "audio-volume://changed", status);
     Ok(status)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("audio_voice_volume_adjust", error))
 }
 
 #[tauri::command]
@@ -127,20 +135,28 @@ pub fn audio_voice_volume_set(
     app: AppHandle,
     state: State<'_, Mutex<crate::AppState>>,
     volume: f32,
-) -> Result<AudioVolumeStatus, String> {
+) -> Result<AudioVolumeStatus, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let status = set_volume(&crate::root_clone(&state)?, volume)?;
-    let _ = app.emit("audio-volume://changed", status);
+    let _ = crate::diagnostics::emit(&app, "audio-volume://changed", status);
     Ok(status)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("audio_voice_volume_set", error))
 }
 
 #[tauri::command]
 pub fn audio_voice_volume_toggle(
     app: AppHandle,
     state: State<'_, Mutex<crate::AppState>>,
-) -> Result<AudioVolumeStatus, String> {
+) -> Result<AudioVolumeStatus, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let status = toggle_mute(&crate::root_clone(&state)?)?;
-    let _ = app.emit("audio-volume://changed", status);
+    let _ = crate::diagnostics::emit(&app, "audio-volume://changed", status);
     Ok(status)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("audio_voice_volume_toggle", error))
 }
 
 struct VoiceState {
@@ -585,7 +601,8 @@ pub async fn audio_voice_start(
     state: State<'_, Mutex<crate::AppState>>,
     entry_id: String,
     mode: Option<String>,
-) -> Result<VoicePlaybackStatus, String> {
+) -> Result<VoicePlaybackStatus, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let overlay = match mode.as_deref().unwrap_or("replace") {
         "replace" => false,
         "overlay" => true,
@@ -595,6 +612,9 @@ pub async fn audio_voice_start(
     tauri::async_runtime::spawn_blocking(move || start_entry(&root, entry_id, overlay))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("audio_voice_start", error))
 }
 
 /// The same service entrypoint is used by UI commands and native global hotkeys.
@@ -921,8 +941,12 @@ pub fn set_monitor(root: &Path, enabled: bool) -> Result<bool, String> {
 pub fn audio_voice_monitor_set(
     state: State<'_, Mutex<crate::AppState>>,
     enabled: bool,
-) -> Result<bool, String> {
+) -> Result<bool, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     set_monitor(&crate::root_clone(&state)?, enabled)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("audio_voice_monitor_set", error))
 }
 
 /// Restart an instance from its clip start. With no instance given and nothing
@@ -1015,11 +1039,15 @@ pub async fn audio_voice_seek(
     state: State<'_, Mutex<crate::AppState>>,
     instance_id: Option<u64>,
     seconds: f64,
-) -> Result<VoicePlaybackStatus, String> {
+) -> Result<VoicePlaybackStatus, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = crate::root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || seek(&root, instance_id, seconds))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("audio_voice_seek", error))
 }
 
 /// Switch looping for one instance; `None` toggles. Takes effect until the
@@ -1045,19 +1073,27 @@ pub fn set_loop(
 pub fn audio_voice_loop(
     instance_id: Option<u64>,
     looping: Option<bool>,
-) -> Result<VoicePlaybackStatus, String> {
+) -> Result<VoicePlaybackStatus, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     set_loop(instance_id, looping)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("audio_voice_loop", error))
 }
 
 #[tauri::command]
 pub async fn audio_voice_replay(
     state: State<'_, Mutex<crate::AppState>>,
     instance_id: Option<u64>,
-) -> Result<VoicePlaybackStatus, String> {
+) -> Result<VoicePlaybackStatus, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = crate::root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || replay(&root, instance_id))
         .await
         .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("audio_voice_replay", error))
 }
 
 #[tauri::command]
@@ -1085,7 +1121,8 @@ pub fn audio_voice_instances() -> Vec<VoicePlaybackStatus> {
 pub fn audio_voice_pause(
     paused: bool,
     instance_id: Option<u64>,
-) -> Result<VoicePlaybackStatus, String> {
+) -> Result<VoicePlaybackStatus, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let mut voice = VOICE.lock().unwrap_or_else(|e| e.into_inner());
     let bus = voice.bus.as_mut().ok_or("audio_playback_not_playing")?;
     let id = instance_id
@@ -1097,6 +1134,9 @@ pub fn audio_voice_pause(
         let _ = monitor.pause(id, paused);
     });
     Ok(status)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("audio_voice_pause", error))
 }
 
 pub fn toggle_pause_latest() -> Result<VoicePlaybackStatus, String> {
@@ -1116,7 +1156,8 @@ pub fn toggle_pause_latest() -> Result<VoicePlaybackStatus, String> {
 }
 
 #[tauri::command]
-pub fn audio_voice_stop_instance(instance_id: u64) -> Result<VoicePlaybackStatus, String> {
+pub fn audio_voice_stop_instance(instance_id: u64) -> Result<VoicePlaybackStatus, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let mut voice = VOICE.lock().unwrap_or_else(|e| e.into_inner());
     let bus = voice.bus.as_mut().ok_or("audio_playback_not_playing")?;
     bus.stop_music(instance_id)?;
@@ -1128,6 +1169,9 @@ pub fn audio_voice_stop_instance(instance_id: u64) -> Result<VoicePlaybackStatus
     });
     voice.last = VoicePlaybackStatus::idle();
     Ok(current_status(&voice))
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("audio_voice_stop_instance", error))
 }
 
 pub fn stop_latest() -> Result<VoicePlaybackStatus, String> {
@@ -1138,7 +1182,7 @@ pub fn stop_latest() -> Result<VoicePlaybackStatus, String> {
         .as_ref()
         .and_then(VoiceBus::latest_music_id)
         .ok_or("audio_playback_not_playing")?;
-    audio_voice_stop_instance(id)
+    audio_voice_stop_instance(id).map_err(String::from)
 }
 
 #[tauri::command]

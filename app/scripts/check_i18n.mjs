@@ -177,6 +177,8 @@ for (const [key, file] of refs) {
 // 少数 key 是运行时拼出来的，literal 永远不会出现在代码里 —— 白名单在此，
 // 加前缀之前先确认它真的有 `${...}` 拼接的取用点。
 const DYNAMIC_PREFIXES = [
+  // Rendered from diagnostics the shell sends; kept in sync with the crate by sync_diag_locales.
+  "diag.",
   "meta.",
   "locale.",
   "msg.",

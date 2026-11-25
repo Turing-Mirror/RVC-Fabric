@@ -1,6 +1,8 @@
+import { ErrorNote } from "./ErrorNote";
+import { errorWithTitle } from "../lib/diagnostics";
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { invoke } from "../lib/invoke";
+import { listen } from "../lib/listen";
 import { Btn } from "./ui";
 import { Select, Toggle } from "./controls";
 import { useI18n } from "../i18n";
@@ -61,7 +63,7 @@ export function AudioHotkeyEditor({ entries, entryId, group, title, query = "" }
 
   useEffect(() => {
     let alive = true;
-    void refresh().catch(() => { if (alive) setError(t("audio.operationFailed")); });
+    void refresh().catch((cause) => { if (alive) setError(errorWithTitle(cause, "audio.operationFailed", "settings")); });
     const listener = listen("hotkeys://changed", () => {
       if (alive) void refresh().catch(() => {});
     });
@@ -85,8 +87,8 @@ export function AudioHotkeyEditor({ entries, entryId, group, title, query = "" }
       await refresh();
     } catch (cause) {
       const text = String(cause);
-      setError(text.includes("audio_hotkey_conflict") ? t("audio.hotkeyConflict")
-        : text.includes("registration_failed") ? t("audio.hotkeyTaken") : t("audio.hotkeySaveFailed"));
+      setError(errorWithTitle(cause, text.includes("audio_hotkey_conflict") ? "audio.hotkeyConflict"
+        : text.includes("registration_failed") ? "audio.hotkeyTaken" : "audio.hotkeySaveFailed", "settings"));
       await refresh().catch(() => {});
     } finally {
       setBusy(false);
@@ -128,9 +130,9 @@ export function AudioHotkeyEditor({ entries, entryId, group, title, query = "" }
       armingRef.current = null;
       recordingRef.current = id;
       setRecording(id);
-    } catch {
+    } catch (cause) {
       armingRef.current = null;
-      setError(t("audio.hotkeySuspendFailed"));
+      setError(errorWithTitle(cause, "audio.hotkeySuspendFailed", "settings"));
     } finally {
       setArming(false);
     }
@@ -198,7 +200,7 @@ export function AudioHotkeyEditor({ entries, entryId, group, title, query = "" }
       <span className="text-[13px] text-[var(--ink)]">{title ?? t("audio.hotkeySection")}</span>
       <Btn disabled={busy || arming || (group === "entries" && available.length === 0)} onClick={add}>{t("audio.hotkeyAdd")}</Btn>
     </div>
-    {error ? <p role="alert" className="text-[var(--danger-text)]">{error}</p> : null}
+    {error ? <ErrorNote text={error} feature="settings" /> : null}
     {shown.length === 0 ? <p>{t(needle ? "audio.hotkeyNoMatch" : "audio.hotkeyEmpty")}</p> : shown.map((binding) => <div key={binding.binding_id}
       className="flex flex-wrap items-end gap-2 rounded-[var(--rs)] bg-[var(--group)] px-3 py-2">
       {!entryId && group !== "entries" ? <label>{t("audio.hotkeyAction")}

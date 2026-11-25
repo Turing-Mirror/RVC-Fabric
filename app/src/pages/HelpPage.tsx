@@ -1,3 +1,5 @@
+import { ErrorNote } from "../components/ErrorNote";
+import { diagnosticOf } from "../lib/diagnostics";
 import { useEffect, useMemo, useRef, useState, memo } from "react";
 import { SearchBox } from "trm-ui";
 import {
@@ -458,7 +460,9 @@ function HelpPageImpl({
               title="VB-Cable"
               titleTip={tip(t("s.7d7d710ba5"))}
               desc={
-                vbMsg ||
+                diagnosticOf(vbMsg)
+                  ? undefined
+                  : vbMsg ||
                 (canUninstall
                   ? t("s.3d2c784f94")
                   : vbReady === "checking"
@@ -492,6 +496,7 @@ function HelpPageImpl({
                 </>
               }
             />
+            {diagnosticOf(vbMsg) ? <ErrorNote text={vbMsg} feature="provision" /> : null}
           </Group>
           <DonateNote />
   

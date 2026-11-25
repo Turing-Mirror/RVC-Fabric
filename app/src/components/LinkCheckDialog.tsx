@@ -1,6 +1,8 @@
+import { diagnosticOf } from "../lib/diagnostics";
+import { ErrorNote } from "./ErrorNote";
 import { useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { invoke } from "../lib/invoke";
+import { listen } from "../lib/listen";
 import { Btn } from "./ui";
 import { QrDialog } from "./QrDialog";
 import { openHelpSection } from "../lib/helpNav";
@@ -320,7 +322,7 @@ export function LinkCheckDialog({ onClose }: { onClose: () => void }) {
         </div>
 
         {err ? (
-          <p className="m-0 mb-3 text-[12.5px] text-[var(--danger-text)]">{err}</p>
+          <ErrorNote text={err} feature="realtimevoicechange" />
         ) : null}
 
         {!data && !err ? (
@@ -386,7 +388,7 @@ export function LinkCheckDialog({ onClose }: { onClose: () => void }) {
                 ) : null}
               </div>
               <div className="mt-1 ml-[48px] text-[12.5px] text-[var(--ink-muted)] leading-relaxed">
-                {micState === "idle" || micState === "running"
+                {diagnosticOf(micNote) ? <ErrorNote text={micNote} feature="recording" /> : micState === "idle" || micState === "running"
                   ? micNote || t("s.lcMicIdle")
                   : micNote}
               </div>

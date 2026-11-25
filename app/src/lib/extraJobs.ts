@@ -6,8 +6,8 @@
  * Rust is still writing the file.
  */
 import { useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { invoke } from "./invoke";
+import { listen } from "./listen";
 import { t } from "../i18n/t";
 
 export type ExtraProgress = {

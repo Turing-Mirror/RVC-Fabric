@@ -1,3 +1,4 @@
+import { diagnosticOf } from "../lib/diagnostics";
 /**
  * Lightweight i18n for the product shell (no react-i18next dependency).
  *
@@ -19,7 +20,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../lib/invoke";
 import { I18nScope } from "trm-ui";
 import {
   ensurePack,
@@ -186,6 +187,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       fb?: string,
       vars?: Record<string, string | number | undefined | null>,
     ) => {
+      if (diagnosticOf(fb)) return fb!;
       if (code) {
         const key = code.includes(".") ? `msg.${code}` : `msg.${code}`;
         // codes are stored as msg.engine.starting — accept both "engine.starting"
@@ -232,6 +234,7 @@ export function useI18n(): I18nCtx {
       setLocale: () => {},
       t,
       tMsg: (code, fallback, vars) => {
+        if (diagnosticOf(fallback)) return fallback!;
         if (code) {
           const path = code.startsWith("msg.") ? code : `msg.${code}`;
           const hit = lookup(primary, path);

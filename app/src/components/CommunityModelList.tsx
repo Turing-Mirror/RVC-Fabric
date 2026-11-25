@@ -1,3 +1,5 @@
+import { ErrorNote } from "./ErrorNote";
+import { diagnosticOf } from "../lib/diagnostics";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useI18n as useUiI18n, SearchBox, useMenu, usePageActive, usePaneOn, type MenuItem } from "trm-ui";
 import { useI18n } from "../i18n";
@@ -175,7 +177,7 @@ export function CommunityModelList({ list, ownName, ownAuthor, authorActive, onB
     {onBack && <PageHead title={profile?.name || ownName || t("s.voiceLinkAuthor")} back={onBack}
       actions={<CommunityAuthorProfileActions fallback={profile?.link} own={ownAuthor} active={authorActive} />} />}
     <div className="mb-4 mt-3"><SearchBox value={query} ariaLabel={uiText("ui.common.search")} onChange={setQuery} /></div>
-    {error && <Warn className="mb-4">{error} <Btn text onClick={retry}>{t("s.38108eaa1d")}</Btn></Warn>}
+    {error && <Warn className="mb-4">{diagnosticOf(error) ? <ErrorNote text={error} feature="store" /> : error} <Btn text onClick={retry}>{t("s.38108eaa1d")}</Btn></Warn>}
     <div ref={results} aria-busy={busy}>
       <CatalogTransition scope={search} page={visiblePage}>
         {result?.items.length ? (

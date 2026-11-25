@@ -69,10 +69,14 @@ FEATURE_DIM = 768
 STAGES = ("preprocess", "f0", "feature", "train", "index")
 
 _emit_lock = threading.Lock()
+_FAILURE_CONTEXT = {}
+_STAGE_LOGS = {}
 
 
 def emit(**kw):
     """一行一个 JSON。带锁是因为 tail 线程和主线程都会往 stdout 写。"""
+    if kw.get("phase") == "error":
+        kw = {**_FAILURE_CONTEXT, **kw}
     with _emit_lock:
         sys.stdout.write(json.dumps(kw, ensure_ascii=False) + "\n")
         sys.stdout.flush()
@@ -526,6 +530,13 @@ def spawn(args, log_file, env=None):
 
 def run_stage(args, log_file, watcher=None, env=None,
               stage_code=mc.TRAIN_STEP_FAILED, ok_codes=(0,)):
+    stage = {mc.TRAIN_PREPROCESS_FAILED: "preprocess", mc.TRAIN_F0_FAILED: "f0",
+             mc.TRAIN_FEATURE_FAILED: "feature", mc.TRAIN_TRAIN_FAILED: "train"}.get(stage_code, "prepare")
+    offset = Path(log_file).stat().st_size if Path(log_file).exists() else 0
+    _STAGE_LOGS[stage] = (log_file, offset)
+    _FAILURE_CONTEXT.update(stage=stage)
+    _FAILURE_CONTEXT.pop("detail", None)
+    _FAILURE_CONTEXT.pop("exit_code", None)
     p = spawn(args, log_file, env=env)
     try:
         code = p.wait()
@@ -537,7 +548,7 @@ def run_stage(args, log_file, watcher=None, env=None,
             watcher.stop()
             watcher.join(timeout=3)
     if code not in ok_codes:
-        dump_log_tail(log_file)
+        _FAILURE_CONTEXT.update(detail=read_log_slice(log_file, offset), exit_code=code)
         fail_code(stage_code, {"code": code, "log": log_file})
     return code
 
@@ -603,17 +614,14 @@ def count_preprocess_ok(log):
     return sum(1 for line in text.splitlines() if line.rstrip().endswith("-> Success"))
 
 
-_OOM_MARKERS = ("outofmemoryerror", "out of memory", "显存")
-
-
-def log_has_oom(log):
-    """训练日志尾部是不是显存不足。只看最后 8000 字，前面的属于上一轮。"""
+def read_log_slice(log, offset):
+    """Raw bytes belonging to this step. Classification is performed by Rust."""
     try:
-        text = Path(log).read_text(encoding="utf-8", errors="replace")[-8000:]
-    except OSError:
-        return False
-    low = text.lower()
-    return any(m in low for m in _OOM_MARKERS)
+        with Path(log).open("rb") as stream:
+            stream.seek(offset)
+            return stream.read().decode("utf-8", errors="replace")
+    except OSError as exc:
+        return str(exc)
 
 
 def rmvpe_ok(root):
@@ -911,6 +919,15 @@ def main():
     except Exception as e:
         fail_code(mc.TRAIN_BAD_REQUEST, {"error": e})
     req = normalize(raw)
+    _STAGE_LOGS.clear()
+    _FAILURE_CONTEXT.clear()
+    _FAILURE_CONTEXT.update(stage="prepare", context={
+        "batch": {"train": req["batch_size"]},
+        "backend": "cuda" if req["device"] == "cuda" else "cpu",
+        "precision": "fp16" if req["is_half"] else "fp32",
+        "sample_rate": SR_MAP[req["sample_rate"]],
+        "operation": "train",
+    })
 
     root = Path(NOW_DIR)
     exp_dir = root / "logs" / req["exp"]
@@ -1019,14 +1036,8 @@ def main():
     if not weights.is_file():
         emit_checkpoint("missing_weights", exp_dir, root, req)
         train_log = exp_dir / "train.log"
-        dump_log_tail(train_log)
-        # 「训练结束但没找到 xxx.pth」对用户没有任何指向。显存不够是这里最常见
-        # 的死法（26.8.20 诊断包连着三次），日志里认得出来就直说。
-        if log_has_oom(train_log):
-            fail_code(
-                mc.TRAIN_OOM,
-                {"batch": req.get("batch_size"), "log": train_log},
-            )
+        offset = _STAGE_LOGS.get("train", (train_log, train_log.stat().st_size if train_log.exists() else 0))[1]
+        _FAILURE_CONTEXT.update(stage="train", detail=read_log_slice(train_log, offset))
         fail_code(mc.TRAIN_NO_WEIGHT, {"name": weights, "exp": req["exp"]})
     published = publish_voice(root, req, weights, index_path)
     snap = emit_checkpoint("done", exp_dir, root, req)

@@ -1,8 +1,10 @@
+import { ErrorNote } from "./ErrorNote";
+import { errorWithTitle } from "../lib/diagnostics";
 import { useCallback, useRef, useState } from "react";
 import { ImageCropDialog, Leave, usePageActive, usePaneOn } from "trm-ui";
 import { useI18n } from "../i18n";
 import { coverDataUrl, pickCoverImage } from "../lib/voices";
-import { Btn, Warn } from "./ui";
+import { Btn } from "./ui";
 
 export function CommunityCover({ value, original, name, onChange, disabled, fallback }: {
   value: string;
@@ -17,7 +19,7 @@ export function CommunityCover({ value, original, name, onChange, disabled, fall
   const pageActive = usePageActive();
   const [source, setSource] = useState<string>();
   const [picking, setPicking] = useState(false);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState("");
   const originalPath = useRef<string | undefined>(undefined);
   const loadImage = useCallback(async () => source ?? "", [source]);
 
@@ -31,15 +33,15 @@ export function CommunityCover({ value, original, name, onChange, disabled, fall
 
   async function open() {
     setPicking(true);
-    setError(false);
+    setError("");
     originalPath.current = original;
     try {
       const image = value
         ? (original ? await coverDataUrl(original).catch(() => value) : value)
         : await pickImage();
       if (image) setSource(image);
-    } catch {
-      setError(true);
+    } catch (error) {
+      setError(errorWithTitle(error, "publication.coverError", "importexport"));
     } finally {
       setPicking(false);
     }
@@ -53,7 +55,7 @@ export function CommunityCover({ value, original, name, onChange, disabled, fall
         <Btn disabled={disabled || picking} busy={picking} onClick={() => void open()}>{t(value ? "models.changeCover" : "publication.chooseCover")}</Btn>
         {value && <Btn disabled={disabled || picking} onClick={() => onChange("")}>{t("s.7b15e5e8e7")}</Btn>}
       </div>
-      {error && <Warn>{t("publication.coverError")}</Warn>}
+      {error && <ErrorNote text={error} feature="importexport" />}
       <Leave>
         {source && paneActive && pageActive ? (
           <ImageCropDialog

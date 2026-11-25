@@ -1,3 +1,5 @@
+import { ErrorNote } from "./ErrorNote";
+import { diagnosticOf } from "../lib/diagnostics";
 import { useEffect, useState } from "react";
 import { Btn, Group, PageHead, PagePad, Warn, copyText, useNotify, usePageActive, usePaneOn } from "trm-ui";
 import { useI18n } from "../i18n";
@@ -45,7 +47,7 @@ export function CommunityModelDetail({ id, title, versionId, owner, onBack, onAu
     <div className="mt-4">
       <StoreSection reloadToken={0} assetId={id} detail onAuthor={onAuthor} />
     </div>
-    {error && <Warn>{error} <Btn text onClick={() => { setError(""); setRetry((n) => n + 1); }}>{t("s.38108eaa1d")}</Btn></Warn>}
+    {error && <Warn>{diagnosticOf(error) ? <ErrorNote text={error} feature="store" /> : error} <Btn text onClick={() => { setError(""); setRetry((n) => n + 1); }}>{t("s.38108eaa1d")}</Btn></Warn>}
     <CatalogTransition scope={detail ? "versions" : "loading"}>
       {detail && detail.versions.length > 0 && <section className="mt-6">
         <h3 className="mb-3 mt-0 text-[16px] font-semibold">{t("publication.versions")}</h3>

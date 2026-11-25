@@ -1,5 +1,6 @@
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { ErrorNote } from "./ErrorNote";
+import { invoke } from "../lib/invoke";
+import { listen } from "../lib/listen";
 import { useEffect, useRef, useState } from "react";
 import { Btn } from "./ui";
 import { runtimeVariantLabel } from "../lib/engine";
@@ -174,9 +175,7 @@ export function RuntimeMigrationDialog({ open, onDone }: Props) {
           </p>
         ) : null}
         {error ? (
-          <p className="text-[12.5px] text-[#c43] m-0 mb-3 leading-relaxed whitespace-pre-line">
-            {error}
-          </p>
+          <ErrorNote text={error} feature="provision" />
         ) : null}
 
         <div className="flex items-center gap-2 justify-end">

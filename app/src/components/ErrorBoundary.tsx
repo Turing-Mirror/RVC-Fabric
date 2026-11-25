@@ -1,5 +1,7 @@
+import { ErrorNote } from "./ErrorNote";
+import { errorWithTitle } from "../lib/diagnostics";
 import { Component, type CSSProperties, type ErrorInfo, type ReactNode } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../lib/invoke";
 import { t } from "../i18n/t";
 
 type Props = { children: ReactNode };
@@ -60,7 +62,7 @@ export class ErrorBoundary extends Component<Props, State> {
           userSelect: "text",
         }}
       >
-        <div style={{ fontSize: 16, color: "var(--ink, #1e242b)" }}>{t("s.61f43bf584")}</div>
+        <ErrorNote localOnly text={errorWithTitle(this.state.stack || this.state.error, "s.61f43bf584", "other")} />
         <div>{t("s.d851b62cf4")}</div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button
@@ -83,19 +85,7 @@ export class ErrorBoundary extends Component<Props, State> {
             {t("window.close")}
           </button>
         </div>
-        <pre
-          style={{
-            margin: 0,
-            maxHeight: "46vh",
-            overflow: "auto",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-all",
-            fontSize: 12.5,
-            color: "var(--meta, #8a949e)",
-          }}
-        >
-          {this.state.stack || String(this.state.error)}
-        </pre>
+
       </div>
     );
   }

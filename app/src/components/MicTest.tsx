@@ -1,6 +1,7 @@
+import { ErrorNote } from "./ErrorNote";
 import { useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { invoke } from "../lib/invoke";
+import { listen } from "../lib/listen";
 import { Btn, HelpMark } from "./ui";
 import { t } from "../i18n/t";
 
@@ -143,7 +144,7 @@ export function MicTest({ deviceReady }: { deviceReady: boolean }) {
             </Btn>
           )}
         </div>
-        {msg ? (
+        {msg ? bad ? <ErrorNote text={msg} feature="recording" /> : (
           <p
             className={[
               "m-0 mt-1.5 text-[12.5px] leading-relaxed whitespace-pre-line",

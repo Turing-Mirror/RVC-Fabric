@@ -1,4 +1,6 @@
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import { invoke, invokeFor } from "./invoke";
+import type { Feature } from "./diagnostics";
 import { t } from "../i18n/t";
 import { forgetThumb } from "trm-ui";
 
@@ -174,7 +176,7 @@ export async function listVoices(options?: { fresh?: boolean }): Promise<VoicesC
   // 共享同一个请求，避免三个页面各自把整个音色目录扫一遍。
   const epoch = voiceCacheEpoch;
   if (voiceRequest?.epoch === epoch) return voiceRequest.promise;
-  const promise = invoke<VoicesCatalog>("voices_list")
+  const promise = invokeFor<VoicesCatalog>("other", "voices_list")
     .then((value) => {
       if (epoch === voiceCacheEpoch) {
         voiceCache = { value, expiresAt: Date.now() + VOICE_CACHE_TTL_MS };
@@ -189,10 +191,10 @@ export async function listVoices(options?: { fresh?: boolean }): Promise<VoicesC
   return promise;
 }
 
-async function invokeVoiceMutation<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+async function invokeVoiceMutation<T>(command: string, args?: Record<string, unknown>, feature?: Feature): Promise<T> {
   invalidateVoicesCache();
   try {
-    return await invoke<T>(command, args);
+    return feature ? await invokeFor<T>(feature, command, args) : await invoke<T>(command, args);
   } finally {
     // 不能让写操作前已经在途的旧 list 请求重新把过期目录写回缓存。
     invalidateVoicesCache();
@@ -201,7 +203,7 @@ async function invokeVoiceMutation<T>(command: string, args?: Record<string, unk
 
 export async function clearVoice() {
   if (!isTauri()) return { ok: false };
-  return invokeVoiceMutation<{ ok?: boolean }>("voices_clear");
+  return invokeVoiceMutation<{ ok?: boolean }>("voices_clear", undefined, "realtimevoicechange");
 }
 
 export async function selectVoice(m: Pick<VoiceModel, "path" | "dir" | "name">) {
@@ -216,7 +218,7 @@ export async function selectVoice(m: Pick<VoiceModel, "path" | "dir" | "name">) 
     path: m.path || "",
     dir: m.dir || "",
     name: m.name || "",
-  });
+  }, "realtimevoicechange");
 }
 
 export async function currentVoice() {

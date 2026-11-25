@@ -509,39 +509,22 @@ class PreprocessSuccessCountTests(unittest.TestCase):
         self.assertEqual(tw.count_preprocess_ok(Path("/definitely/not/here.log")), 0)
 
 
-class TrainOomDetectionTests(unittest.TestCase):
-    """「训练结束但没找到 xxx.pth」对用户毫无指向，显存不足要直说。"""
-
-    # 用户日志里的原文。
-    OOM = (
-        "torch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate 20.00 MiB "
-        "(GPU 0; 8.00 GiB total capacity; 2.00 GiB already allocated; 4.84 GiB free; "
-        "2.04 GiB reserved in total by PyTorch)"
-    )
-
-    def _log(self, td, text):
-        p = Path(td) / "train.log"
-        p.write_text(text, encoding="utf-8")
-        return p
-
-    def test_recognizes_the_real_message(self):
+class TrainLogEvidenceTests(unittest.TestCase):
+    def test_old_oom_is_excluded_even_when_the_new_attempt_is_short(self):
         with tempfile.TemporaryDirectory() as td:
-            self.assertTrue(tw.log_has_oom(self._log(td, "INFO:voice:start\n" + self.OOM)))
+            path = Path(td) / "train.log"
+            path.write_bytes(b"torch.cuda.OutOfMemoryError: CUDA out of memory\n")
+            offset = path.stat().st_size
+            with path.open("a", encoding="utf-8", newline="") as stream:
+                stream.write("new attempt failed\n")
+            self.assertEqual(tw.read_log_slice(path, offset), "new attempt failed\n")
 
-    def test_a_healthy_log_is_not_oom(self):
+    def test_the_whole_current_step_is_retained(self):
         with tempfile.TemporaryDirectory() as td:
-            self.assertFalse(
-                tw.log_has_oom(self._log(td, "====> Epoch: 12 [t] | (0:00:01)\n"))
-            )
-
-    def test_only_the_tail_counts(self):
-        # 上一轮的显存不足不该栽给这一轮：只看最后 8000 字。
-        with tempfile.TemporaryDirectory() as td:
-            text = self.OOM + "\n" + ("====> Epoch: 1 [t]\n" * 900)
-            self.assertFalse(tw.log_has_oom(self._log(td, text)))
-
-    def test_missing_log_is_not_oom(self):
-        self.assertFalse(tw.log_has_oom(Path("/definitely/not/here.log")))
+            path = Path(td) / "train.log"
+            text = "CUDA out of memory\n" + "traceback frame\n" * 1000
+            path.write_bytes(text.encode("utf-8"))
+            self.assertEqual(tw.read_log_slice(path, 0), text)
 
 
 class SnapshotPublishedPathTests(unittest.TestCase):

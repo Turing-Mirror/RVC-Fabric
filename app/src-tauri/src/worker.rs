@@ -929,6 +929,7 @@ pub fn start_worker_kind(root: &Path, kind: WorkerKind) -> Result<(), String> {
         ),
     );
 
+    crate::diagnostics::worker_request(root, 0, crate::diagnostics::LogSlice::start(&crate::logging::daily_path(root, crate::logging::CH_WORKER)));
     let mut env = env_for_runtime(root);
     env.insert("TM_WORKER_KIND".into(), kind.as_str().into());
     #[cfg(windows)]
@@ -1042,6 +1043,16 @@ fn watch_exit(root: &Path, mut child: std::process::Child) {
             };
             let Some(code) = code else { return };
             crate::crash::record_exit(pid, code);
+            if code != 0 {
+                let mut status = protocol::read_status(&root);
+                if status["pid"].as_u64() == Some(pid as u64) {
+                    status["state"] = json!("error");
+                    status["exit_code"] = json!(code);
+                    if status["error"].as_str().unwrap_or("").is_empty() { status["error"] = json!(format!("worker exited: {code}")); }
+                    let status = crate::diagnostics::worker_status(&root, status, fabric_diagnostics::Feature::EngineStart);
+                    if let Some(fields) = status.as_object() { let _ = protocol::write_status_merge(&root, fields.clone()); }
+                }
+            }
             if crate::crash::is_fatal_status(code) {
                 let desc = crate::crash::describe(code);
                 append_log(&root, &format!("worker pid={pid} 被系统终止，退出码 {desc}"));
@@ -1225,7 +1236,10 @@ fn send_command_wait(
             ));
         }
     }
-    protocol::write_command(root, cmd, payload).map_err(|e| e.to_string())
+    let slice = crate::diagnostics::LogSlice::start(&crate::logging::daily_path(root, crate::logging::CH_WORKER));
+    let seq = protocol::write_command(root, cmd, payload).map_err(|e| e.to_string())?;
+    crate::diagnostics::worker_request(root, seq, slice);
+    Ok(seq)
 }
 
 /// 「引擎正忙，上一条命令还没被接收」。locales 归 Agent I；key 落地前
@@ -1307,16 +1321,7 @@ pub fn wait_model_applied(
                 match mphase {
                     "committed" => return Ok(()),
                     "failed" => {
-                        let detail = ma
-                            .get("error")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string();
-                        return Err(if detail.is_empty() {
-                            model_apply_unconfirmed_msg()
-                        } else {
-                            detail
-                        });
+                        return Err(crate::diagnostics::status_error(root, st.clone(), fabric_diagnostics::Feature::RealtimeVoiceChange));
                     }
                     _ => {} // loading/selected 等中间态：继续等
                 }
@@ -1498,11 +1503,7 @@ pub fn start_vc_with_input(
     };
     let st = wait_worker_ready(root, ready_ms);
     if st.get("state").and_then(|v| v.as_str()) == Some("error") {
-        return Err(st
-            .get("error")
-            .and_then(|v| v.as_str())
-            .unwrap_or("worker error")
-            .to_string());
+        return Err(crate::diagnostics::status_error(root, st, fabric_diagnostics::Feature::EngineStart));
     }
     {
         // Soft stop any leftover stream so start is clean. 派发失败和超时都
@@ -1679,16 +1680,7 @@ fn wait_own_stop(root: &Path, seq: u64, pid: u32, timeout_ms: u64) -> Result<(),
             // 错误透出去；否则（idle / 又被新 start 拉起的 running）这条
             // stop 本身已经处理完。
             if st.get("state").and_then(|v| v.as_str()) == Some("error") {
-                let detail = st
-                    .get("error")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string();
-                return Err(if detail.is_empty() {
-                    crate::i18n::t("s.0ec38407bc")
-                } else {
-                    detail
-                });
+                return Err(crate::diagnostics::status_error(root, st.clone(), fabric_diagnostics::Feature::RealtimeVoiceChange));
             }
             return Ok(());
         }
@@ -1819,6 +1811,7 @@ pub(crate) fn invalidate_model_cache(root: &Path) -> Result<(), String> {
 /// Snapshot for the UI (status + derived meter 0..1).
 pub fn status_for_ui(root: &Path) -> Value {
     let mut st = protocol::read_status(root);
+    st = crate::diagnostics::worker_status(root, st, fabric_diagnostics::Feature::RealtimeVoiceChange);
     // Prefer localized message when worker sent a stable message_code.
     crate::i18n::localize_status(&mut st);
     let alive = is_worker_alive(root);
@@ -1901,7 +1894,7 @@ pub fn status_for_ui(root: &Path) -> Value {
             }
         }
     }
-    st
+    crate::diagnostics::worker_status(root, st, fabric_diagnostics::Feature::RealtimeVoiceChange)
 }
 
 #[cfg(test)]
@@ -2635,7 +2628,7 @@ mod tests {
         );
         protocol::write_status_merge(&root, f).unwrap();
         let t0 = Instant::now();
-        let err = wait_model_applied(&root, 9, r"C:\voices\b.pth", "", 30_000).unwrap_err();
+        let _err = wait_model_applied(&root, 9, r"C:\voices\b.pth", "", 30_000).unwrap_err();
         assert!(t0.elapsed() < Duration::from_secs(2), "死 worker 要立刻失败");
         let _ = std::fs::remove_dir_all(&root);
     }

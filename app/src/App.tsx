@@ -1,3 +1,4 @@
+import { ErrorNote } from "./components/ErrorNote";
 import {
   lazy,
   Suspense,
@@ -10,16 +11,8 @@ import {
 import { Dock, type OutputMode } from "./components/Dock";
 import { LinkCheckDialog } from "./components/LinkCheckDialog";
 import { GuidePill, SetupGuide, type GuideStep } from "./components/SetupGuide";
-import { classifyTrouble, type Trouble } from "./lib/trouble";
 
 /** 各类启动失败的说明与按钮文案。 */
-const TROUBLE_TEXT: Record<Trouble, [string, string]> = {
-  voice: ["s.trouble.voice.body", "s.trouble.voice.act"],
-  runtime: ["s.trouble.runtime.body", "s.trouble.runtime.act"],
-  devices: ["s.trouble.devices.body", "s.trouble.devices.act"],
-  vram: ["s.trouble.vram.body", "s.trouble.vram.act"],
-  unknown: ["s.trouble.unknown.body", "s.trouble.unknown.act"],
-};
 import { Nudge } from "./components/Nudge";
 import { UpdateNudge } from "./components/UpdateNudge";
 import { AudioRecoveryBanner } from "./components/AudioRecovery";
@@ -51,9 +44,9 @@ import { applyVoiceToEngine } from "./lib/voiceApply";
 import { requestVoiceSwitch } from "./lib/voiceSwitch";
 import { useUpdateFlow } from "./lib/updateFlow";
 import { pickAutoDevices } from "./lib/deviceSetup";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "./lib/invoke";
 import { applyAppearance } from "./lib/appearance";
-import { listen } from "@tauri-apps/api/event";
+import { listen } from "./lib/listen";
 import { dropListen } from "./lib/tauriListen";
 import type { SettingsTab } from "./pages/SettingsPage";
 
@@ -659,6 +652,14 @@ export default function App() {
     setMoreTopNonce(0);
     setPage("more");
   }, []);
+  useEffect(() => {
+    const unlisten = listen<{ destination: string }>("diagnostic-navigate", ({ payload }) => {
+      if (payload.destination === "devices") openDeviceSettings();
+      else if (payload.destination === "community") openCommunity();
+      else if (payload.destination === "runtime") { setMoreTopNonce(n => n + 1); setPage("more"); }
+    });
+    return () => { void unlisten.then(fn => fn()).catch(() => {}); };
+  }, [openCommunity, openDeviceSettings]);
   const [helpFocus, setHelpFocus] = useState("");
   const [helpFocusNonce, setHelpFocusNonce] = useState(0);
   const openHelp = useCallback((section?: string) => {
@@ -930,19 +931,7 @@ export default function App() {
   // —— 变声没能启动时的引导：说清是哪一类问题，给一个能按的下一步 ——
   // 同一条报错只提示一次，用户关掉或处理后不再重复弹出。
   const [troubleSeen, setTroubleSeen] = useState("");
-  const trouble: Trouble | null = engine.lastError && engine.lastError !== troubleSeen ? classifyTrouble(engine.lastError) : null;
-  const fixTrouble = (kind: Trouble) => {
-    if (kind === "voice") openGuide("voice");
-    else if (kind === "devices") openGuide("devices");
-    else if (kind === "runtime") {
-      setProvisionMinimized(false);
-      setShowProvision(true);
-    }
-    else if (kind === "vram") {
-      setSettingsTab("perf");
-      setPage("settings");
-    } else setSelfCheckOpen(true);
-  };
+  const trouble = !!engine.lastError && engine.lastError !== troubleSeen;
   // —— 变声用的设备被拔掉（见 device_watch.rs）：正在变声就先停下，说明是哪一台；
   // 插回来之后可以直接继续，也可以去引导里改选别的设备 ——
   const [unplugged, setUnplugged] = useState<{ kind: string; name: string; back: boolean; wasRunning: boolean } | null>(null);
@@ -1546,11 +1535,10 @@ export default function App() {
           actions={
             <>
               <Btn onClick={() => setTroubleSeen(engine.lastError)}>{t("s.trouble.dismiss")}</Btn>
-              {trouble !== "unknown" ? <Btn onClick={() => { setTroubleSeen(engine.lastError); setSelfCheckOpen(true); }}>{t("s.trouble.check")}</Btn> : null}
-              <Btn primary onClick={() => { setTroubleSeen(engine.lastError); fixTrouble(trouble); }}>{t(TROUBLE_TEXT[trouble][1])}</Btn>
+              <Btn onClick={() => { setTroubleSeen(engine.lastError); setSelfCheckOpen(true); }}>{t("s.trouble.check")}</Btn>
             </>
           }
-        >{t(TROUBLE_TEXT[trouble][0])}</Nudge>
+        ><ErrorNote text={engine.lastError} feature="realtimevoicechange" /></Nudge>
       ) : updateOffer ? (
         <UpdateNudge
           offer={updateOffer}

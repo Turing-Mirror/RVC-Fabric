@@ -123,13 +123,13 @@ pub fn cancel_for(owner: Option<&str>) -> bool {
 fn emit(app: &AppHandle, phase: &str, done: u64, total: u64, message: &str) {
     let _ = app.emit(
         "separate-progress",
-        json!({
+        crate::diagnostics::event(json!({
             "owner": OWNER.lock().unwrap_or_else(|e| e.into_inner()).clone(),
             "phase": phase,
             "done": done,
             "total": total.max(1),
             "message": message,
-        }),
+        }), fabric_diagnostics::Feature::Separation),
     );
 }
 
@@ -181,11 +181,12 @@ pub fn run_owned(
             .and_then(|s| s.to_str())
             .unwrap_or("separate")
     );
+    let log_slice = crate::diagnostics::LogSlice::start(&log);
     let mut trace = crate::logging::RunTrace::new(log.clone());
     let started = std::time::Instant::now();
     let result = run_inner(
         app, root, input, output, model, format, aggression, &mut trace,
-    );
+    ).map_err(|raw| log_slice.finish(fabric_diagnostics::Feature::Separation, raw));
     let outcome = match &result {
         Ok(_) => "ok",
         Err(e) if e == &crate::i18n::t("s.a5ffdc95ee") => "cancelled",
@@ -351,7 +352,6 @@ fn run_inner(
         // worker 的中文原样转发 = 非中文用户看中文。有 code 走语言包。
         let msg_owned = crate::i18n::t_worker_msg(&v);
         let msg = msg_owned.as_str();
-        let detail = v.get("detail").and_then(|x| x.as_str()).unwrap_or("");
         let done = v.get("done").and_then(|x| x.as_u64()).unwrap_or(0);
         let total = v.get("total").and_then(|x| x.as_u64()).unwrap_or(1);
         match phase {
@@ -383,13 +383,8 @@ fn run_inner(
                 trace.note(&format!("progress done files={}", files.len()));
             }
             "error" => {
-                if !detail.is_empty() {
-                    trace.note(&format!("error {msg} detail={detail}"));
-                    fail = Some(format!("{msg}（{detail}）"));
-                } else {
-                    trace.note(&format!("error {msg}"));
-                    fail = Some(msg.to_string());
-                }
+                trace.note(&format!("raw worker error {v}"));
+                fail = Some(crate::diagnostics::worker_error(fabric_diagnostics::Feature::Separation, &v));
             }
             _ => {}
         }

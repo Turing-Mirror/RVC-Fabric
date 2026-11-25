@@ -158,6 +158,12 @@ def _preflight_engine(f0method: str) -> str | None:
 
 
 def emit(**kw) -> None:
+    if kw.get("phase") in ("error", "skip"):
+        import uuid
+        kw.setdefault("error_id", uuid.uuid4().hex)
+        if sys.exc_info()[0]:
+            kw.setdefault("detail", traceback.format_exc())
+            kw.setdefault("os_error", getattr(sys.exc_info()[1], "winerror", None))
     line = json.dumps(kw, ensure_ascii=False) + "\n"
     try:
         sys.stdout.write(line)
@@ -462,6 +468,8 @@ def run_request(engine: "_Engine", req: dict) -> int:
         emit(
             phase="error",
             **mc.msg_fields(mc.STS_ALL_FAILED, {"total": total, "first": first}),
+            detail="\n".join(item.get("detail", item["reason"]) for item in skipped),
+            skipped=skipped,
         )
         return 1
 

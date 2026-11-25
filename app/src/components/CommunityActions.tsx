@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../lib/invoke";
 import { useMenu, useNotify, type MenuItem } from "trm-ui";
 import { useI18n } from "../i18n";
 import { openExternal } from "../lib/plaza";

@@ -1,3 +1,5 @@
+import { ErrorNote } from "./ErrorNote";
+import { diagnosticOf } from "../lib/diagnostics";
 import { useState } from "react";
 import { useI18n as useUiI18n, Field, Pane, Panes, SearchBox, SegmentControl, Select, TextArea, TextInput, useNotify } from "trm-ui";
 import { useI18n } from "../i18n";
@@ -202,7 +204,7 @@ export function CommunityPublisher({ initial, auth, onBack, onSave, onSubmitted,
         />
         {saved && <span className="text-xs text-[var(--meta)]">{t("publication.saved")}</span>}
       </div>
-      {error && <Warn className="mb-4">{error}</Warn>}
+      {error && <Warn className="mb-4">{diagnosticOf(error) ? <ErrorNote text={error} feature="store" /> : error}</Warn>}
       <Panes value={step} order={steps} transition="slide" keepScroll>
         <Pane id="source">
           <div className="space-y-4 pb-4">

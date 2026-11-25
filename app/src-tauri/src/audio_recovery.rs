@@ -94,7 +94,8 @@ pub async fn audio_recover(
     action: String,
     device: Option<Value>,
     enabled: Option<bool>,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = crate::root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || {
         static LOCK: Mutex<()> = Mutex::new(());
@@ -172,6 +173,9 @@ pub async fn audio_recover(
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("audio_recover", error))
 }
 
 #[cfg(test)]

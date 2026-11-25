@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DockableModal, TransferProgress } from "trm-ui";
-import { listen } from "@tauri-apps/api/event";
+import { listen } from "../lib/listen";
 import { Btn } from "./ui";
 import { ErrorNote } from "./ErrorNote";
 import { t } from "../i18n/t";
@@ -126,7 +126,7 @@ export function AudioToolsDialog({
       <div className="p-7">
         <h2 className="text-[22px] font-semibold m-0 mb-2">{t("audioTools.title")}</h2>
         {phase === "failed" ? (
-          <div className="mb-5"><ErrorNote text={error} compact /></div>
+          <div className="mb-5"><ErrorNote feature="download" text={error} compact /></div>
         ) : phase !== "downloading" ? (
           <p className="text-[13px] text-[var(--help)] m-0 mb-5 leading-relaxed">
             {phase === "done" ? t("audioTools.done") : t("audioTools.desc", { v0: size })}

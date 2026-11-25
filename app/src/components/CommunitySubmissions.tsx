@@ -1,3 +1,5 @@
+import { ErrorNote } from "./ErrorNote";
+import { diagnosticOf, errorSummary } from "../lib/diagnostics";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n as useUiI18n, Modal, SegmentControl, useMenu, useNotify, usePageActive, usePaneOn, type MenuItem } from "trm-ui";
 import { useI18n } from "../i18n";
@@ -143,7 +145,8 @@ export function CommunitySubmissions({ auth, drafts, recent, onAuthor, onBack, o
       setFilter("withdrawn");
       setPage(1);
     } catch (error) {
-      tip(publicationError(error, "list"));
+      const msg = publicationError(error, "list");
+      tip(diagnosticOf(msg) ? errorSummary(msg, "store") : msg);
     } finally {
       setApplying(false);
     }
@@ -166,7 +169,7 @@ export function CommunitySubmissions({ auth, drafts, recent, onAuthor, onBack, o
       <SegmentControl className="mb-4 mt-3" value={filter} options={states.map((id) => ({ id, label: labels[id] }))}
         onChange={(next) => { setFilter(next); setPage(1); }} />
       {batch && filter !== "draft" && <Btn onClick={() => { setBatch(undefined); setPage(1); }}>{uiText("ui.common.clear")}</Btn>}
-      {error && account !== null && filter !== "draft" && !publishedModels && <Warn className="mb-3">{error}</Warn>}
+      {error && account !== null && filter !== "draft" && !publishedModels && <Warn className="mb-3">{diagnosticOf(error) ? <ErrorNote text={error} feature="store" /> : error}</Warn>}
       <CatalogTransition scope={filter} order={states} page={current}>
         {filter !== "draft" && account === null ? (
           <div className="flex items-center gap-3">

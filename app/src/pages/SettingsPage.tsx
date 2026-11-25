@@ -1,7 +1,9 @@
+import { diagnosticOf, errorWithTitle } from "../lib/diagnostics";
+import { ErrorNote } from "../components/ErrorNote";
 import { useEffect, useMemo, useRef, useState, memo } from "react";
 import { SearchBox, TextInput, usePageLeave } from "trm-ui";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { invoke, invokeFor } from "../lib/invoke";
+import { listen } from "../lib/listen";
 import { SegmentControl } from "../components/SegmentControl";
 import { CatalogTransition } from "../components/CatalogTransition";
 import { Block, Btn, HelpMark, PagePad, Warn } from "../components/ui";
@@ -178,7 +180,7 @@ function SettingsPageImpl({
 
   // 旧九项由后端校验碰撞、注册后才算保存；被系统或其他软件占用时后端恢复原组合。
   const persistHotkey = async (key: string, v: unknown) => {
-    await invoke("legacy_hotkey_set", { patch: { [key]: v } });
+    await invokeFor("settings", "legacy_hotkey_set", { patch: { [key]: v } });
   };
 
   /**
@@ -274,7 +276,7 @@ function SettingsPageImpl({
 
       <PagePad>
         {c.error ? (
-          <p className="text-[12.5px] text-[var(--danger-text)] mt-4 mb-0">{c.error}</p>
+          <ErrorNote text={c.error} feature="settings" />
         ) : null}
 
         {c.restartKeys.length ? (
@@ -1026,7 +1028,7 @@ function SettingsPageImpl({
                       if (autoStartBusy) return;
                       setAutoStartBusy(true);
                       try {
-                        invoke("autostart_set", { enabled: v })
+                        invokeFor("settings", "autostart_set", { enabled: v })
                           .then(() => setAutoStart(v))
                           // 写失败（权限/注册表异常）回读真实状态，开关跟着
                           // 注册表走，不假装改成了。
@@ -1174,7 +1176,7 @@ function SettingsPageImpl({
               />
               <Field
                 label={t("s.a6df38586d")}
-                desc={updateLine || t("s.1fd4658c44")}
+                desc={diagnosticOf(updateLine) ? undefined : updateLine || t("s.1fd4658c44")}
                 inline
                 control={
                   <Btn onClick={onCheckUpdate} busy={updateBusy}>
@@ -1182,6 +1184,7 @@ function SettingsPageImpl({
                   </Btn>
                 }
               />
+              {diagnosticOf(updateLine) ? <ErrorNote text={updateLine} feature="update" /> : null}
               <p className="text-xs text-[var(--help)] m-0 leading-[1.75]">{t("s.5fe7a5211b")}<br />{t("s.6c26ecbfb3")}</p>
             </div>
           </Block>
@@ -1271,8 +1274,9 @@ function prettyCombo(v: string): string {
 
 function hotkeyError(error: unknown): string {
   const text = String(error);
-  return text.includes("audio_hotkey_conflict") ? t("audio.hotkeyConflict")
-    : text.includes("registration_failed") ? t("audio.hotkeyTaken") : t("audio.hotkeySaveFailed");
+  const key = text.includes("audio_hotkey_conflict") ? "audio.hotkeyConflict"
+    : text.includes("registration_failed") ? "audio.hotkeyTaken" : "audio.hotkeySaveFailed";
+  return errorWithTitle(error, key, "settings");
 }
 
 function hotkeyStatusLabel(status: string): string {
@@ -1415,7 +1419,7 @@ function HotkeyRow({
       </button>
       {status ? <span className="ml-2 text-[12.5px] text-[var(--meta)]">{hotkeyStatusLabel(status)}</span> : null}
       {recordError ? <span role="alert" className="text-[var(--danger-text)]">{t("audio.hotkeySuspendFailed")}</span> : null}
-      {saveError ? <span role="alert" className="text-[var(--danger-text)]">{saveError}</span> : null}
+      {saveError ? <ErrorNote text={saveError} feature="settings" /> : null}
       {value ? <Btn onClick={() => commit("")}>{t("audio.hotkeyClear")}</Btn> : null}
     </div>
   );

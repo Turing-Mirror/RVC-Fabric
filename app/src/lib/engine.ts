@@ -1,9 +1,11 @@
-import { invoke } from "@tauri-apps/api/core";
+import { errorSummary, type Diagnostic } from "./diagnostics";
+import { invoke } from "./invoke";
 import {  tStatic as t, tStatic  } from "../i18n";
 import { joinClauses, listText } from "./text";
 
 /** Mirrors User_Data/runtime_control/status.json + shell extras. */
 export type EngineStatus = {
+  diagnostic?: Diagnostic;
   state?: string;
   error?: string;
   message?: string;
@@ -386,6 +388,7 @@ export function statusTitle(st: EngineStatus): string {
 }
 
 export function statusSub(st: EngineStatus): string {
+  if (st.diagnostic || st.state === "error") return errorSummary(st.diagnostic ?? st.error, "realtimevoicechange");
   const code = String(st.message_code || "");
   const staleBoot =
     BOOT_CODES.has(code) && st.state !== "starting";

@@ -1491,7 +1491,7 @@ pub fn install_voice_entry(
     ));
 
     let emit = |phase: &str, done: u64, total: u64, message: &str| {
-        let _ = app.emit(
+        let _ = crate::diagnostics::emit(&app, 
             "store-progress",
             store_progress_payload(&id, phase, done, total, message),
         );
@@ -1860,7 +1860,7 @@ pub fn install_staged(
     };
 
     let emit = |phase: &str, message: &str| {
-        let _ = app.emit(
+        let _ = crate::diagnostics::emit(&app, 
             "store-progress",
             json!({ "voice_id": id, "phase": phase, "done": 1, "total": 1,
                     "percent": 100, "message": message }),

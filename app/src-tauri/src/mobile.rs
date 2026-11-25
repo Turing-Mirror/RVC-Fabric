@@ -539,11 +539,15 @@ fn validate_settings(value: &Value) -> Result<Map<String, Value>, String> {
 }
 
 #[tauri::command]
-pub fn mobile_status() -> Result<Value, String> {
+pub fn mobile_status() -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     let s = service()?;
     let mut status = s.desktop_status();
     status["output_devices"] = Service::outputs();
     Ok(status)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("mobile_status", error))
 }
 fn pairing_host(host: Option<String>, addresses: &[String]) -> Result<String, String> {
     match host {
@@ -556,7 +560,8 @@ fn pairing_host(host: Option<String>, addresses: &[String]) -> Result<String, St
     }
 }
 #[tauri::command]
-pub async fn mobile_pairing(host: Option<String>) -> Result<Value, String> {
+pub async fn mobile_pairing(host: Option<String>) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let s = service()?;
     let addresses = gateway::addresses();
     let host = pairing_host(host, &addresses)?;
@@ -576,9 +581,13 @@ pub async fn mobile_pairing(host: Option<String>) -> Result<Value, String> {
     Ok(
         json!({"payload":payload,"svg":svg,"expires_at":invitation["expires_at"],"endpoint":endpoint,"addresses":addresses,"host":host}),
     )
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("mobile_pairing", error))
 }
 #[tauri::command]
-pub async fn mobile_action(action: Value) -> Result<Value, String> {
+pub async fn mobile_action(action: Value) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let s = service()?;
     match string(&action, "type") {
         "use" => {
@@ -621,6 +630,9 @@ pub async fn mobile_action(action: Value) -> Result<Value, String> {
     }
     s.changed();
     Ok(s.desktop_status())
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("mobile_action", error))
 }
 
 #[cfg(test)]

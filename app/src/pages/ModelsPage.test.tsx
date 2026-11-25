@@ -359,3 +359,70 @@ describe("模型页训练轮次", () => {
     expect(m.container.textContent).toContain(t("s.modelVersionEpoch", { v0: 500 }));
   });
 });
+
+describe("模型页顶部提示条", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
+    invalidateVoicesCache();
+    tauri.invoke.mockReset();
+    tauri.invoke.mockImplementation((cmd: string) => {
+      if (cmd === "voices_list") return Promise.resolve(CATALOG);
+      if (cmd === "config_get") return Promise.resolve({});
+      return Promise.resolve({ items: [] });
+    });
+  });
+
+  afterEach(() => {
+    while (mounts.length) mounts.pop()?.unmount();
+    invalidateVoicesCache();
+    delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
+    vi.useRealTimers();
+  });
+
+  it("报错提示不自动消失，可手动关闭；非报错提示 4 秒后自动消失", async () => {
+    tauri.invoke.mockImplementation((cmd: string) => {
+      if (cmd === "voices_list") return Promise.resolve(CATALOG);
+      if (cmd === "config_get") return Promise.resolve({});
+      if (cmd === "voices_open_dir") return Promise.reject(new Error("open failed"));
+      return Promise.resolve({ items: [] });
+    });
+    const m = mount(<ModelsPage />);
+    mounts.push(m);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    const openDirBtn = [...m.container.querySelectorAll("button")]
+      .find((b) => b.textContent === t("s.031c105578"));
+    expect(openDirBtn).toBeDefined();
+    await act(async () => {
+      openDirBtn!.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(m.container.querySelector('[role="alert"]')).not.toBeNull();
+
+    // 超过 4 秒后报错条仍然保留
+    await act(async () => { vi.advanceTimersByTime(5000); });
+    expect(m.container.querySelector('[role="alert"]')).not.toBeNull();
+
+    // 点击关闭按钮后收起
+    const closeBtn = [...m.container.querySelectorAll("button")]
+      .find((b) => b.textContent === t("s.6c14bd7f6f"));
+    expect(closeBtn).toBeDefined();
+    act(() => closeBtn!.click());
+    expect(m.container.querySelector('[role="alert"]')).toBeNull();
+
+    // 非报错提示（刷新完成）4 秒后照旧自动消失
+    const refreshBtn = [...m.container.querySelectorAll("button")]
+      .find((b) => b.textContent === t("s.38108eaa1d"));
+    expect(refreshBtn).toBeDefined();
+    await act(async () => {
+      refreshBtn!.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(m.container.querySelector('[role="status"]')?.textContent).toContain(t("s.58b4af2771"));
+    await act(async () => { vi.advanceTimersByTime(4100); });
+    expect(m.container.querySelector('[role="status"]')).toBeNull();
+  });
+});

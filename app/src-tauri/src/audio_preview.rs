@@ -41,8 +41,12 @@ fn preview_device_allowed(root: &Path, id: &str) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn audio_preview_devices() -> Result<Vec<output::OutputDevice>, String> {
+pub fn audio_preview_devices() -> Result<Vec<output::OutputDevice>, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     output::devices()
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("audio_preview_devices", error))
 }
 
 #[tauri::command]
@@ -52,7 +56,8 @@ pub async fn audio_preview_start(
     device_id: String,
     start: f64,
     end: Option<f64>,
-) -> Result<PlaybackStatus, String> {
+) -> Result<PlaybackStatus, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = crate::root_clone(&state)?;
     let request = PREVIEW.reserve();
     let result = tauri::async_runtime::spawn_blocking(move || {
@@ -65,6 +70,9 @@ pub async fn audio_preview_start(
     .await;
     PREVIEW.release(request);
     result.map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("audio_preview_start", error))
 }
 
 #[tauri::command]
@@ -73,8 +81,12 @@ pub fn audio_preview_status() -> PlaybackStatus {
 }
 
 #[tauri::command]
-pub fn audio_preview_pause(paused: bool) -> Result<PlaybackStatus, String> {
+pub fn audio_preview_pause(paused: bool) -> Result<PlaybackStatus, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = (|| {
     PREVIEW.pause(paused)
+
+    })();
+    result.map_err(|error| crate::diagnostics::command_error("audio_preview_pause", error))
 }
 
 #[tauri::command]

@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Value};
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 
 use crate::catalog;
 use crate::config;
@@ -688,6 +688,7 @@ fn format_speed(bps: u64) -> String {
 /// 「解压失败 Lib/site-packages/…: 拒绝访问」只会以为又得重下，实际上重下
 /// 一遍还是同样的错，真正要动的是杀软白名单或者磁盘空间。
 fn extract_error_text(raw: &str) -> String {
+    let compatibility = (|| -> String {
     let why = crate::download::explain_error(raw)
         .map(crate::i18n::t)
         .unwrap_or_else(|| crate::i18n::t("s.rtExtractFailed"));
@@ -697,6 +698,13 @@ fn extract_error_text(raw: &str) -> String {
         crate::i18n::t("s.rtExtractHelp"),
         crate::i18n::te("s.dlDetail", &raw),
     )
+
+    })();
+    let mut evidence = fabric_diagnostics::Evidence::new(fabric_diagnostics::Feature::Provision, crate::diagnostics::error_id());
+    evidence.text = raw.to_owned();
+    evidence.context.operation = Some(fabric_diagnostics::Operation::Extract);
+    evidence.context.retry_safe = Some(false);
+    crate::diagnostics::failure(evidence, compatibility).encoded()
 }
 
 fn emit_progress(app: &AppHandle, phase: &str, done: u64, total: u64, message: &str) {
@@ -715,7 +723,7 @@ fn emit_progress_speed(
     // Keep a fractional percent so multi-GB downloads do not sit at "0%" until
     // hundreds of MB have landed (round(0.4) == 0).
     let pct = ((done as f64 / total as f64) * 100.0).clamp(0.0, 100.0);
-    let _ = app.emit(
+    let _ = crate::diagnostics::emit(&app, 
         "provision-progress",
         json!({
             "phase": phase,

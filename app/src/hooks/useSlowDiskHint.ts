@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../lib/invoke";
 import type { StartupStep } from "../lib/engine";
 
 /** 启动引擎、载入推理库这两步在机械硬盘上会读几 GB 文件。 */

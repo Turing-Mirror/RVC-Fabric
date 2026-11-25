@@ -235,6 +235,7 @@ pub fn explain_error(raw: &str) -> Option<&'static str> {
 /// 联网请求失败时给用户看的话：原因，加上该怎么做。原始报错只写进日志，
 /// 反馈时从日志里取，不在界面上铺一串地址。
 pub(crate) fn plain_error(raw: &str) -> String {
+    let compatibility = (|| -> String {
     crate::logging::shell_log!(format!("network request failed: {raw}"));
     let Some(key) = explain_error(raw) else {
         return crate::i18n::t("s.netUnknown");
@@ -245,6 +246,13 @@ pub(crate) fn plain_error(raw: &str) -> String {
         _ => return crate::i18n::t(key),
     };
     crate::i18n::t2("s.netWithAction", &crate::i18n::t(key), &crate::i18n::t(action))
+
+    })();
+    let mut evidence = fabric_diagnostics::Evidence::new(fabric_diagnostics::Feature::Download, crate::diagnostics::error_id());
+    evidence.text = raw.to_owned();
+    evidence.context.operation = Some(fabric_diagnostics::Operation::Download);
+    evidence.context.retry_safe = Some(true);
+    crate::diagnostics::failure(evidence, compatibility).encoded()
 }
 
 /// 报错的完整形状：一句人话 → 试过哪些源 → 能自己做点什么 → 技术细节。
@@ -252,6 +260,7 @@ pub(crate) fn plain_error(raw: &str) -> String {
 /// 技术细节留在最后一行而不是删掉：用户来群里问的时候贴的就是这一整段，
 /// 没有它我们只知道「下载失败」，一样查不出是哪一步。
 fn download_error_text(raw: &str, attempts: u32, hosts: &[String]) -> String {
+    let compatibility = (|| -> String {
     let mut out = String::new();
     match explain_error(raw) {
         Some(key) => out.push_str(&crate::i18n::t(key)),
@@ -276,6 +285,13 @@ fn download_error_text(raw: &str, attempts: u32, hosts: &[String]) -> String {
         out.push_str(&crate::i18n::te("s.dlDetail", &raw));
     }
     out
+
+    })();
+    let mut evidence = fabric_diagnostics::Evidence::new(fabric_diagnostics::Feature::Download, crate::diagnostics::error_id());
+    evidence.text = raw.to_owned();
+    evidence.context.operation = Some(fabric_diagnostics::Operation::Download);
+    evidence.context.retry_safe = Some(true);
+    crate::diagnostics::failure(evidence, compatibility).encoded()
 }
 
 fn suffixed(base: &Path, suffix: &str) -> PathBuf {
@@ -1065,13 +1081,15 @@ mod tests {
     #[test]
     fn plain_error_hides_the_raw_request() {
         let raw = "https://cnb.cool/a/index.json?_=1: error sending request for url (https://cnb.cool/a/index.json?_=1)";
-        let msg = plain_error(raw);
+        let envelope = crate::diagnostics::decode(&plain_error(raw)).unwrap();
+        assert!(envelope.diagnostic.detail.text.contains(raw));
+        let msg = envelope.message;
         assert!(!msg.contains("cnb.cool"));
         assert!(!msg.is_empty());
         assert_eq!(explain_error("x: HTTP 404 Not Found"), Some("s.dlWhyRefused"));
         assert_eq!(explain_error("Download request failed with status: 503"), Some("s.dlWhyServer"));
         assert_eq!(explain_error("signature verification failed"), Some("s.dlWhyHash"));
-        let unknown = plain_error("something odd");
+        let unknown = crate::diagnostics::decode(&plain_error("something odd")).unwrap().message;
         assert!(!unknown.contains("something odd"));
     }
 

@@ -1,6 +1,8 @@
+import { ErrorNote } from "./ErrorNote";
+import { diagnosticOf } from "../lib/diagnostics";
 import { useCallback, useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { invoke, invokeFor } from "../lib/invoke";
+import { listen } from "../lib/listen";
 import { TextArea } from "trm-ui";
 import { Btn } from "./ui";
 import { t } from "../i18n/t";
@@ -110,7 +112,7 @@ export function ConsultDialog({
     setRecording(l);
     setSeconds(0);
     try {
-      await invoke("consult_record_start", { lang: l });
+      await invokeFor("recording", "consult_record_start", { lang: l });
     } catch (e) {
       setRecording("");
       setErr(String(e));
@@ -125,7 +127,7 @@ export function ConsultDialog({
     setErr("");
     setBusy(t("s.consultBuilding"));
     try {
-      const r = await invoke<{ ok: boolean; path: string; missing: number }>("consult_build", { note });
+      const r = await invokeFor<{ ok: boolean; path: string; missing: number }>("other", "consult_build", { note });
       setBusy("");
       if (r.missing) setErr(t("neptune.consultPartial", { count: r.missing }));
       else onDone(r.path);
@@ -229,7 +231,11 @@ export function ConsultDialog({
         />
 
         {err ? (
-          <p className="text-[12.5px] text-[var(--danger-text)] mt-0 mb-3 break-all">{err}</p>
+          diagnosticOf(err) ? (
+            <ErrorNote text={err} feature="recording" />
+          ) : (
+            <p className="text-[12.5px] text-[var(--danger-text)] mt-0 mb-3 break-all">{err}</p>
+          )
         ) : null}
 
         <div className="flex gap-2 justify-end items-center flex-wrap">

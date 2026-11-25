@@ -1,3 +1,4 @@
+import type { TrainingCopy } from "../lib/diagnosticActions";
 import { useState } from "react";
 import { Pager, QueueList, Tag, usePaged } from "trm-ui";
 import { Btn } from "./ui";
@@ -12,7 +13,7 @@ const STATE_KEYS: Record<TrainJobState, string> = {
 };
 const STAGE_KEYS = { preprocess: "s.1a37ffe775", f0: "s.bda11a3c2d", feature: "s.672c1db9d8", train: "s.796e01d5af", index: "s.79f9110607" };
 export function TrainingQueue({ jobs, error, loaded = true, waitingForRealtime, eta, onAction, onBatch }: {
-  jobs: TrainJob[]; error: string; loaded?: boolean; waitingForRealtime: boolean; eta?: string; onBatch?: () => void; onAction: (id: string, action: string) => Promise<void>;
+  jobs: TrainJob[]; error: string; loaded?: boolean; waitingForRealtime: boolean; eta?: string; onBatch?: (request: TrainingCopy) => Promise<void>; onAction: (id: string, action: string) => Promise<void>;
 }) {
   const paged = usePaged(jobs, 5);
   const [pending, setPending] = useState<string[]>([]);
@@ -25,7 +26,7 @@ export function TrainingQueue({ jobs, error, loaded = true, waitingForRealtime, 
       <h3 className="text-[15px] font-semibold m-0">{t("trainingQueue.Title")}</h3>
       {jobs.some(terminalJob) ? <Btn disabled={pending.includes("")} onClick={() => void action("", "clear")}>{t("trainingQueue.Clear")}</Btn> : null}
     </div>
-    {error ? <ErrorNote text={error} /> : null}
+    {error ? <ErrorNote text={error} feature="training" /> : null}
     {waitingForRealtime ? <p className="m-0 text-[12.5px] text-[var(--ink-muted)]">{t("trainingQueue.WaitRealtime")}</p> : null}
     <div className="rounded-[var(--r)] bg-[var(--group)] p-3.5 min-h-0 overflow-y-auto">
       <QueueList scope="training" page={paged.page} items={paged.slice} keyOf={job => job.id}
@@ -52,7 +53,7 @@ export function TrainingQueue({ jobs, error, loaded = true, waitingForRealtime, 
                 </div>
                 {eta ? <div className="text-[12.5px] text-[var(--meta)]">{eta}</div> : null}
               </> : null}
-              {job.state === "failed" && job.error ? <ErrorNote text={job.error} code={job.progress?.message_code} extraAction={job.progress?.message_code === "train.oom" && onBatch ? { label: t("s.errActBatch"), run: onBatch } : null} /> : null}
+              {job.state === "failed" && job.error ? <ErrorNote text={job.error} diagnostic={job.diagnostic} feature="training" onEditTrainingCopy={onBatch} /> : null}
               <div className="flex items-center gap-2 flex-wrap">
                 {running ? <Btn disabled={disabled || job.state === "cancelling"} onClick={() => void action(job.id, "cancel")}>{t("s.44e681a374")}</Btn> : <>
                   {terminalJob(job) || job.state === "paused" ? <Btn disabled={disabled} onClick={() => void action(job.id, "retry")}>{t(job.state === "paused" ? "trainingQueue.Continue" : "trainingQueue.Retry")}</Btn> : null}

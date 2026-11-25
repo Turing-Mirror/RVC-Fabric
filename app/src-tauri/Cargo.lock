@@ -1759,6 +1759,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "fabric-diagnostics"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "fancy-regex"
 version = "0.19.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4859,6 +4867,7 @@ dependencies = [
  "axum",
  "chrono",
  "fabric-audio",
+ "fabric-diagnostics",
  "flate2",
  "futures-util",
  "hex",

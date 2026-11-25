@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../lib/invoke";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useI18n as useUiI18n, Field, Modal, TextInput, useNotify } from "trm-ui";
 import { useI18n } from "../i18n";

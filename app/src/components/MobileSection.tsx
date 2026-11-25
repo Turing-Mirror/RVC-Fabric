@@ -1,5 +1,7 @@
+import { ErrorNote } from "./ErrorNote";
+import { errorWithTitle } from "../lib/diagnostics";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../lib/invoke";
 import { Block, Btn, Group, ListItem } from "./ui";
 import { Select, Toggle, Slider } from "./controls";
 import { useI18n } from "../i18n";
@@ -109,7 +111,7 @@ export function MobileSection({ mobile }: { mobile: MobileController }) {
       {pages > 1 && <div className="flex justify-end gap-2 p-3" aria-label={t("mobile.devices")}>
         {Array.from({ length: pages }, (_, i) => <Btn key={i} disabled={i === currentPage} onClick={() => setPage(i)}>{i + 1}</Btn>)}
       </div>}
-      {(error || mobile.error) && <p role="alert" className="px-5 py-3 text-[var(--notify)]">{t("mobile.failed")}</p>}
+      {(error || mobile.error) && <ErrorNote text={errorWithTitle(error || mobile.error, "mobile.failed", "other")} feature="other" />}
     </Group>
   </Block>;
 }

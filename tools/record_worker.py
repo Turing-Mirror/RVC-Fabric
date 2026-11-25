@@ -47,6 +47,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 AUDIO_EXT = {".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac", ".wma", ".opus"}
 DEFAULT_MAX_SEC = 30 * 60
 BLOCK = 1024
+_CONTEXT = {}
 
 
 def _ensure_stdio_utf8() -> None:
@@ -59,6 +60,10 @@ def _ensure_stdio_utf8() -> None:
 
 
 def emit(**kw) -> None:
+    if kw.get("phase") == "error":
+        kw["detail"] = traceback.format_exc() if sys.exc_info()[0] else kw.get("message", "")
+        kw["os_error"] = getattr(sys.exc_info()[1], "winerror", None)
+        kw["context"] = dict(_CONTEXT)
     line = json.dumps(kw, ensure_ascii=False) + "\n"
     try:
         sys.stdout.write(line)
@@ -149,6 +154,7 @@ def rms_db(samples) -> float:
     录音时每秒调十几次、每次一整块 1024 帧，纯 Python 逐帧平方是白扔的开销，
     有 numpy 就走向量化。单元测试传的是普通 list，留一条回退路。
     """
+    _CONTEXT["operation"] = "dependency_import"
     try:
         import numpy as np
 
@@ -192,28 +198,17 @@ def peak_db(samples) -> float:
 
 def _open_error_code(exc: BaseException) -> str:
     """打不开设备 → 稳定标识。壳按标识出多语言文案。"""
-    low = (str(exc) or type(exc).__name__).lower()
-    if (
-        "unanticipated host error" in low
-        or "device unavailable" in low
-        or "invalid device" in low
-        or "error opening" in low
-        or "portaudio" in low
-    ):
-        return "busy"
+    # A host/PortAudio error does not prove another process owns the device.
+    # Preserve the exception; the shared Rust diagnoser distinguishes the causes.
     return "open"
 
 
 def _friendly_open_error(exc: BaseException) -> str:
-    if _open_error_code(exc) == "busy":
-        return (
-            "打不开麦克风。常见原因：实时变声正在用这块设备（尤其开了 WASAPI 独占），"
-            "或别的软件占着输入。请先在主界面停止变声后再试。"
-        )
     return str(exc) or type(exc).__name__
 
 
 def record(req: dict) -> int:
+    _CONTEXT.clear()
     out = str(req.get("output") or "").strip()
     stop_file = Path(str(req.get("stop_file") or "").strip())
     device_name = str(req.get("device") or "").strip()
@@ -231,6 +226,7 @@ def record(req: dict) -> int:
             emit(phase="error", message="缺少输出路径", code="nopath")
             return 2
         dest = Path(out)
+        _CONTEXT["operation"] = "file_write"
         dest.parent.mkdir(parents=True, exist_ok=True)
 
     try:
@@ -241,6 +237,7 @@ def record(req: dict) -> int:
         emit(phase="error", message=f"录音组件不可用：{e}", code="nolib")
         return 1
 
+    _CONTEXT["operation"] = "device_open"
     try:
         idx, resolved = pick_device(device_name, hostapi)
     except Exception as e:
@@ -263,6 +260,7 @@ def record(req: dict) -> int:
         sr = 44100
         kwargs["samplerate"] = sr
 
+    _CONTEXT.update(device_names=[resolved or device_name], sample_rate=int(kwargs["samplerate"]))
     label = resolved or device_name or "系统默认"
     emit(
         phase="start",
@@ -278,9 +276,11 @@ def record(req: dict) -> int:
     try:
         # `probe` 不落盘：contextlib.nullcontext 让下面那段循环两种模式共用一份，
         # 不用为了少写一个 wav 头再抄一遍读流的逻辑。
+        _CONTEXT["operation"] = "file_write" if not probe else "device_open"
         writer = (
             contextlib.nullcontext() if probe else wave.open(str(dest), "wb")
         )
+        _CONTEXT["operation"] = "device_open"
         with sd.InputStream(**kwargs) as stream, writer as wf:
             if wf is not None:
                 wf.setnchannels(1)
@@ -298,7 +298,9 @@ def record(req: dict) -> int:
                     mono = mono.mean(axis=1)
                 if wf is not None:
                     pcm = np.clip(mono * 32767.0, -32768, 32767).astype(np.int16)
+                    _CONTEXT["operation"] = "file_write"
                     wf.writeframes(pcm.tobytes())
+                    _CONTEXT["operation"] = "device_open"
                 frames += int(mono.shape[0])
                 pk = peak_db(mono)
                 if pk > top:

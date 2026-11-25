@@ -1,6 +1,8 @@
+import { ErrorNote } from "../components/ErrorNote";
+import { diagnosticOf, errorSummary, isCancelledError } from "../lib/diagnostics";
 import { ExportVoicePackages } from "../components/ExportVoicePackages";
 import { configSnapshot } from "../lib/configSnapshot";
-import { useCallback, useEffect, useMemo, useRef, useState, memo, type MouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, memo, type CSSProperties, type MouseEvent } from "react";
 import { CoverPlaceholder, SearchBox, ThumbImage, usePageActive } from "trm-ui";
 import { SegmentControl } from "../components/SegmentControl";
 import { Pager } from "../components/Pager";
@@ -20,10 +22,10 @@ import {
 import { Block, Btn, Group, HelpMark, ListItem, PageHead, PagePad } from "../components/ui";
 import { CropCoverDialog } from "../components/CropCoverDialog";
 import { copyText } from "trm-ui";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../lib/invoke";
 import { AuthorsDialog } from "../components/AuthorsDialog";
 import { dspTips } from "../lib/dspTips";
-import { listen } from "@tauri-apps/api/event";
+import { listen } from "../lib/listen";
 import { dropListen } from "../lib/tauriListen";
 import { activateDsp, deactivateDsp, setHot } from "../lib/engine";
 import { requestVoiceSwitch, useVoiceSwitchPending } from "../lib/voiceSwitch";
@@ -179,21 +181,30 @@ function ModelsPageImpl({
   const [page, setPage] = useState(0);
   const [cols, setCols] = useState(5);
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState("");
+  const [msg, setMsgState] = useState("");
+  const [msgErr, setMsgErr] = useState(false);
+  const setMsg = (value: string, error = true) => {
+    if (error && value) {
+      const code = diagnosticOf(value)?.code;
+      if (code === "diag.cancelled" || code === "diag.recovered") return;
+    }
+    setMsgState(value);
+    setMsgErr(error);
+  };
   // 与首页同一个派发器：pendingKey 是切换中/排队中的目标，按卡片即时反馈。
   const pendingKey = useVoiceSwitchPending();
 
-  // 页面消息（删除/改名/导入的结果）自动消失：不消失的话会一直挂着，
-  // 而下一条消息会盖掉上一条，用户更容易漏看。4 秒足够读完一行。
+  // 非报错页面消息（刷新/导出/删除等结果）4 秒后自动消失；
+  // 报错消息带有原因、步骤与操作按钮，不自动消失，留给用户查看并手动关闭。
   useEffect(() => {
-    if (!msg) return;
-    const id = window.setTimeout(() => setMsg(""), 4000);
+    if (!msg || msgErr) return;
+    const id = window.setTimeout(() => setMsg("", false), 4000);
     return () => window.clearTimeout(id);
-  }, [msg]);
+  }, [msg, msgErr]);
 
   const dropVoice = useCallback(async () => {
     if (!dspId) {
-      setMsg(t("msg.vc.need_model"));
+      setMsg(t("msg.vc.need_model"), false);
       return;
     }
     try {
@@ -202,7 +213,7 @@ function ModelsPageImpl({
       onVoiceChange?.({
         model: { name: "", path: "", dir: "", file: "" },
       });
-      setMsg(t("s.dspCleared"));
+      setMsg(t("s.dspCleared"), false);
     } catch (e) {
       setMsg(String(e));
     }
@@ -227,7 +238,7 @@ function ModelsPageImpl({
       setMenu(null);
       setAuthorPick(null);
       setCoverEdit(null);
-      setMsg("");
+      setMsg("", false);
     }
     const on = pageOn;
     const list = listRequest;
@@ -381,7 +392,10 @@ function ModelsPageImpl({
   useEffect(() => {
     const close = () => setMenu(null);
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMenu(null);
+      if (e.key === "Escape") {
+        setMenu(null);
+        setMsg("", false);
+      }
     };
     window.addEventListener("click", close);
     window.addEventListener("keydown", onKey);
@@ -413,7 +427,7 @@ function ModelsPageImpl({
 
   const onUse = async (m: VoiceModel) => {
     if (m.missing) {
-      setMsg(t("s.314a72cba4"));
+      setMsg(t("s.314a72cba4"), false);
       return;
     }
     // 与首页同一个派发器（B-05）：点下即 pending，同一目标去重，
@@ -491,11 +505,16 @@ function ModelsPageImpl({
                 try {
                   const r = await importVoices(selected?.dir);
                   if (r.errors?.length) {
-                    setMsg(formatLocalizedList(r.errors.map((e) => e.error)));
+                    setMsg(
+                      formatLocalizedList(
+                        r.errors.map((e) => diagnosticOf(e.error) ? errorSummary(e.error, "importexport") : e.error),
+                      ),
+                      false,
+                    );
                   }
                   await reload();
                 } catch (e) {
-                  if (String(e) !== t("s.a5ffdc95ee")) setMsg(String(e));
+                  if (!isCancelledError(e)) setMsg(String(e));
                 } finally {
                   setBusy(false);
                 }
@@ -504,7 +523,7 @@ function ModelsPageImpl({
             <Btn
               onClick={async () => {
                 await reload(true);
-                setMsg(t("s.58b4af2771"));
+                setMsg(t("s.58b4af2771"), false);
               }}
             >{t("s.38108eaa1d")}</Btn>
             <Btn
@@ -521,10 +540,28 @@ function ModelsPageImpl({
         voices={models.filter((model) => model.dir && !model.missing).map((model) => ({ id: model.dir, name: model.name }))} />
       {msg ? (
         <div
-          role="status"
-          className="fixed top-4 left-1/2 -translate-x-1/2 z-[300] max-w-[72vw] px-4 py-2.5 rounded-[var(--rs)] text-[13px] leading-relaxed text-center whitespace-pre-wrap bg-[var(--ink)] text-[var(--surface)] shadow-[0_10px_30px_rgba(0,0,0,0.28)]"
+          role={msgErr ? undefined : "status"}
+          className={[
+            "fixed top-4 left-1/2 -translate-x-1/2 z-[300] max-w-[72vw] px-4 py-2.5 rounded-[var(--rs)] text-[13px] leading-relaxed whitespace-pre-wrap bg-[var(--ink)] text-[var(--surface)] shadow-[0_10px_30px_rgba(0,0,0,0.28)]",
+            msgErr ? "text-left" : "text-center",
+          ].join(" ")}
         >
-          {msg}
+          {msgErr ? (
+            <div
+              className="flex items-start gap-3 [&>div]:mt-0"
+              style={{
+                "--ink": "var(--surface)",
+                "--ink-muted": "color-mix(in srgb, var(--surface) 82%, transparent)",
+                "--line": "color-mix(in srgb, var(--surface) 28%, transparent)",
+                "--danger-text": "var(--surface)",
+              } as CSSProperties}
+            >
+              <ErrorNote text={msg} error={msgErr} feature="importexport" />
+              <Btn text onClick={() => setMsg("", false)}>{t("s.6c14bd7f6f")}</Btn>
+            </div>
+          ) : (
+            msg
+          )}
         </div>
       ) : null}
 
@@ -749,7 +786,7 @@ function ModelsPageImpl({
                   setIndexItems(r.items || []);
                   await reload();
                 } catch (e) {
-                  if (String(e) !== t("s.a5ffdc95ee")) setMsg(String(e));
+                  if (!isCancelledError(e)) setMsg(String(e));
                 }
               }}
             >{t("s.8f84a93f91")}</Btn>
@@ -766,7 +803,7 @@ function ModelsPageImpl({
                     try {
                       await promoteLegacy(selected!.path);
                       await reload();
-                      setMsg(t("s.1784a97067"));
+                      setMsg(t("s.1784a97067"), false);
                     } catch (e) {
                       setMsg(String(e));
                     }
@@ -966,7 +1003,7 @@ function ModelsPageImpl({
                           const pr = await listProfiles(selected!.dir);
                           setProfiles(pr.items || []);
                         } catch (e) {
-                          if (String(e) !== t("s.a5ffdc95ee")) setMsg(String(e));
+                          if (!isCancelledError(e)) setMsg(String(e));
                         }
                       }}
                     >{t("s.93ccffa7cc")}</Btn>
@@ -974,9 +1011,9 @@ function ModelsPageImpl({
                       onClick={async () => {
                         try {
                           await exportProfile(selected!.dir);
-                          setMsg(t("s.fc70c44b85"));
+                          setMsg(t("s.fc70c44b85"), false);
                         } catch (e) {
-                          if (String(e) !== t("s.a5ffdc95ee")) setMsg(String(e));
+                          if (!isCancelledError(e)) setMsg(String(e));
                         }
                       }}
                     >{t("s.7213716bfe")}</Btn>
@@ -1023,7 +1060,7 @@ function ModelsPageImpl({
           onSaved={async (message) => {
             setCoverEdit(null);
             await reload();
-            if (message) setMsg(message);
+            if (message) setMsg(message, false);
           }}
         />
       ) : null}</Leave>
@@ -1082,7 +1119,7 @@ function MoreMenu({
   model: VoiceModel;
   onClose: () => void;
   onDone: () => void;
-  onMessage: (s: string) => void;
+  onMessage: (s: string, error?: boolean) => void;
   /** 多位作者都有主页：交给页面上的选择框，让用户挑要打开哪一位。 */
   onPickAuthors: (authors: VoiceAuthor[]) => void;
   /** 打开封面裁剪对话框（仅本地音色有这一项）。 */
@@ -1094,10 +1131,10 @@ function MoreMenu({
       label: t("neptune.exportModel"),
       action: async () => {
         onClose();
-        onMessage(t("neptune.exportBusy"));
+        onMessage(t("neptune.exportBusy"), false);
         try {
           const path = await invoke<string | null>("voices_export_model", { modelDir: model.dir });
-          onMessage(path ? t("neptune.exportDone") : "");
+          onMessage(path ? t("neptune.exportDone") : "", false);
         } catch (e) { onMessage(String(e)); }
       },
     });
@@ -1106,7 +1143,7 @@ function MoreMenu({
       action: async () => {
         const authors = voiceAuthorList(model).map((a) => (a.name && a.url ? t("s.labelWithDetail", { v0: a.name, v1: a.url }) : a.name || a.url));
         const text = [model.name, ...authors, model.source_url, "RVC Fabric"].filter(Boolean).join("\n");
-        onMessage(t(await copyText(text) ? "s.sumCopied" : "s.sumCopyFailed"));
+        onMessage(t(await copyText(text) ? "s.sumCopied" : "s.sumCopyFailed"), false);
         onClose();
       },
     });

@@ -41,6 +41,10 @@ struct Job {
     #[serde(default)]
     error: String,
     #[serde(default)]
+    diagnostic: Option<fabric_diagnostics::Diagnostic>,
+    #[serde(default)]
+    attempt: u32,
+    #[serde(default)]
     result: Value,
     /// Freeze the selected compute backend with the request. Audio remains in place.
     device: String,
@@ -106,6 +110,7 @@ fn view(q: &Queue) -> Value {
     json!({"waiting_for_realtime": q.jobs.iter().any(|j| j.state == State::Queued) && train::realtime_active(&q.root), "jobs": q.jobs.iter().map(|j| json!({
         "id": j.id, "req": j.req, "state": j.state,
         "progress": j.progress, "error": j.error, "result": j.result,
+        "diagnostic": j.diagnostic, "attempt": j.attempt,
     })).collect::<Vec<_>>()})
 }
 fn publish(app: &AppHandle, q: &Queue) {
@@ -143,6 +148,8 @@ pub fn enqueue(app: AppHandle, root: PathBuf, mut req: TrainReq) -> Result<Value
             state: State::Queued,
             progress: Value::Null,
             error: String::new(),
+            diagnostic: None,
+            attempt: 0,
             result: Value::Null,
             device,
         });
@@ -183,6 +190,7 @@ fn change(q: &mut Queue, id: &str, action: &str) -> Result<bool, String> {
             job.state = State::Queued;
             job.progress = Value::Null;
             job.error.clear();
+            job.diagnostic = None;
             job.result = Value::Null;
             q.jobs.push(job);
         }
@@ -257,6 +265,7 @@ fn claim(q: &mut Queue) -> Option<Job> {
     }
     let job = q.jobs.iter_mut().find(|j| j.state == State::Queued)?;
     job.state = State::Running;
+    job.attempt += 1;
     Some(job.clone())
 }
 fn dispatch(app: AppHandle, root: PathBuf) {
@@ -292,7 +301,9 @@ fn dispatch(app: AppHandle, root: PathBuf) {
             if let Err(e) = save(q) {
                 if let Some(j) = q.jobs.iter_mut().find(|j| j.id == job.id) {
                     j.state = State::Paused;
-                    j.error = e;
+                    let failure = crate::diagnostics::command_error("train_queue_save", e);
+                    j.error = failure.message;
+                    j.diagnostic = Some(failure.diagnostic);
                 }
                 q.dispatching = false;
                 publish(&app, q);
@@ -307,6 +318,7 @@ fn dispatch(app: AppHandle, root: PathBuf) {
             job.req.clone(),
             Some(&job.id),
             Some(&job.device),
+            Some(job.attempt),
         );
         let mut slot = lock();
         let q = slot.as_mut().unwrap();
@@ -324,7 +336,14 @@ fn dispatch(app: AppHandle, root: PathBuf) {
                     } else {
                         State::Failed
                     };
-                    j.error = error;
+                    if j.state == State::Failed {
+                        let failure = crate::diagnostics::decode(&error).unwrap_or_else(|| {
+                            let value = json!({"message": error, "stage": "prepare"});
+                            crate::diagnostics::decode(&train::training_error(&j.req, Some(&j.id), &j.device, &value)).unwrap()
+                        });
+                        j.error = failure.message;
+                        j.diagnostic = Some(failure.diagnostic);
+                    } else { j.error = error; }
                 }
             }
         }
@@ -359,6 +378,8 @@ mod tests {
             },
             progress: Value::Null,
             error: String::new(),
+            diagnostic: None,
+            attempt: 0,
             result: Value::Null,
             device: "cpu".into(),
         }

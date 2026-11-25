@@ -82,13 +82,13 @@ class PeakDbTests(unittest.TestCase):
 class OpenErrorCodeTests(unittest.TestCase):
     """设备被占用要能跟其他打不开的原因分开 —— 前者的解法是「先停变声」。"""
 
-    def test_portaudio_busy_errors(self):
+    def test_portaudio_does_not_claim_device_is_busy(self):
         for text in (
             "Error opening InputStream: Unanticipated host error",
             "PortAudio Error: Device unavailable",
             "Invalid device",
         ):
-            self.assertEqual(_open_error_code(RuntimeError(text)), "busy", text)
+            self.assertEqual(_open_error_code(RuntimeError(text)), "open", text)
 
     def test_anything_else_is_generic(self):
         self.assertEqual(_open_error_code(ValueError("boom")), "open")

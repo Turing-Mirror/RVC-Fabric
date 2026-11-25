@@ -20,6 +20,7 @@ const tauri = vi.hoisted(() => ({
 vi.mock("@tauri-apps/api/core", () => ({ invoke: tauri.invoke }));
 
 import { useUpdateFlow, type UpdateInfo } from "./updateFlow";
+import { diagnosticOf } from "./diagnostics";
 
 const offer = (over: Partial<UpdateInfo> = {}): UpdateInfo => ({
   local: "1.6.0",
@@ -95,6 +96,8 @@ describe("useUpdateFlow", () => {
     expect(flow().offer).toBeNull();
     expect(flow().busy).toBe(false);
     expect(flow().line).toContain("network down");
+    expect(diagnosticOf(flow().line)?.title.key).toBe("s.updateCheckFailed");
+    expect(diagnosticOf(flow().line)?.detail.text).toContain("network down");
     unmount();
   });
 
@@ -231,6 +234,7 @@ describe("useUpdateFlow", () => {
     expect(flow().working).toBe(false);
     expect(flow().busy).toBe(false);
     expect(flow().error).not.toBe("");
+    expect(diagnosticOf(flow().error)?.title.key).toBe("s.3d1fde4601");
     unmount();
   });
 
@@ -252,6 +256,8 @@ describe("useUpdateFlow", () => {
     expect(flow().working).toBe(false);
     expect(flow().busy).toBe(false);
     expect(flow().error).toContain("下载中断");
+    expect(diagnosticOf(flow().error)?.title.key).toBe("s.updateInstallFailed");
+    expect(diagnosticOf(flow().error)?.detail.text).toContain("下载中断");
     expect(flow().offer).not.toBeNull();
     // 原地重试：再发一次 update_apply，成功。
     fail = false;

@@ -285,7 +285,8 @@ pub async fn audio_trim(
     input: String,
     start: f64,
     end: f64,
-) -> Result<String, String> {
+) -> Result<String, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = crate::root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || {
         let dest = trim(&root, Path::new(&input), start, end)?;
@@ -295,6 +296,9 @@ pub async fn audio_trim(
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("audio_trim", error))
 }
 
 #[tauri::command]
@@ -305,7 +309,8 @@ pub async fn audio_cut(
     start: f64,
     end: f64,
     duration: f64,
-) -> Result<String, String> {
+) -> Result<String, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = crate::root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || {
         let dest = cut(&root, Path::new(&input), start, end, duration)?;
@@ -315,6 +320,9 @@ pub async fn audio_cut(
     })
     .await
     .map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("audio_cut", error))
 }
 
 #[cfg(test)]

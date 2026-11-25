@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../lib/invoke";
 import { TextInput } from "trm-ui";
 import { Btn } from "./ui";
 import { ErrorNote } from "./ErrorNote";
@@ -391,7 +391,7 @@ export function CkptAdvanced() {
         ) : null}
 
         {msg ? (
-          <ErrorNote text={msg} error={msgErr} />
+          <ErrorNote feature="importexport" text={msg} error={msgErr} />
         ) : null}
       </div>
       </CatalogTransition>

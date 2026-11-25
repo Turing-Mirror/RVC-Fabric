@@ -1,6 +1,6 @@
 import { configSnapshot } from "../lib/configSnapshot";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { listen } from "../lib/listen";
 import { dropListen } from "../lib/tauriListen";
 import { getConfig, notifyConfigPatch, setConfig, type Config } from "../lib/config";
 import { applyAppearance } from "../lib/appearance";

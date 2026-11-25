@@ -48,7 +48,8 @@ fn record(name: String, result: Result<PackDetails, String>) -> Pack {
 #[tauri::command]
 pub(crate) async fn publication_read_packs(
     window: tauri::WebviewWindow, state: State<'_, Mutex<AppState>>,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     let files = shell_extras::dialog_on(Some(&window)).add_filter("ZIP", &["zip"]).pick_files().unwrap_or_default();
     tauri::async_runtime::spawn_blocking(move || {
@@ -58,10 +59,14 @@ pub(crate) async fn publication_read_packs(
         }).collect();
         serde_json::to_value(records).map_err(|e| e.to_string())
     }).await.map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("publication_read_packs", error))
 }
 
 #[tauri::command]
-pub(crate) async fn publication_read_manifest(window: tauri::WebviewWindow) -> Result<Value, String> {
+pub(crate) async fn publication_read_manifest(window: tauri::WebviewWindow) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let Some(path) = shell_extras::dialog_on(Some(&window)).add_filter("JSON", &["json"]).pick_file() else {
         return Ok(Value::Null);
     };
@@ -82,12 +87,16 @@ pub(crate) async fn publication_read_manifest(window: tauri::WebviewWindow) -> R
         };
         serde_json::to_value(records).map_err(|e| e.to_string())
     }).await.map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("publication_read_manifest", error))
 }
 
 #[tauri::command]
 pub(crate) async fn publication_export_packs(
     window: tauri::WebviewWindow, state: State<'_, Mutex<AppState>>, dirs: Vec<String>,
-) -> Result<Value, String> {
+) -> Result<Value, crate::diagnostics::CommandError> {
+    let result: Result<_, String> = async {
     let root = root_clone(&state)?;
     if dirs.is_empty() {
         return Ok(Value::Null);
@@ -97,6 +106,9 @@ pub(crate) async fn publication_export_packs(
     };
     tauri::async_runtime::spawn_blocking(move || export(&root, &dest, dirs))
         .await.map_err(|e| e.to_string())?
+
+    }.await;
+    result.map_err(|error| crate::diagnostics::command_error("publication_export_packs", error))
 }
 
 fn export(root: &Path, dest: &Path, dirs: Vec<String>) -> Result<Value, String> {

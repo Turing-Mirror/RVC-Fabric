@@ -1,7 +1,9 @@
+import { ErrorNote } from "../components/ErrorNote";
+import { diagnosticOf, errorWithTitle } from "../lib/diagnostics";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from "react";
 import { SearchBox, TextInput, usePageLeave } from "trm-ui";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { invoke } from "../lib/invoke";
+import { listen } from "../lib/listen";
 import { Btn, PageHead, PagePad } from "../components/ui";
 import { MoreMenuPopup, type PopupAnchor } from "../components/MoreMenu";
 import { Collapse, Leave } from "../components/Presence";
@@ -116,7 +118,7 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
     let alive = true;
     void invoke<Library>("audio_library_get")
       .then((value) => { if (alive) acceptLibrary(value); })
-      .catch(() => { if (alive) setError(t("audio.readFailed")); });
+      .catch((cause) => { if (alive) setError(errorWithTitle(cause, "audio.readFailed", "other")); });
     void invoke<Device[]>("audio_preview_devices")
       .then((value) => { if (alive) setDevices(value); })
       .catch(() => { if (alive) setDevices([]); });
@@ -283,22 +285,22 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
         setNotice(t("audio.scanCancelled"));
       } else if (code.includes("audio_export_cancelled")) {
         setNotice(t("audio.exportCancelled"));
-      } else setError(code.includes("audio_number_taken") ? t("audio.numberTaken")
-        : code.includes("audio_clip_invalid") ? t("audio.clipInvalid")
-        : code.includes("audio_preview_device_is_") ? t("audio.previewDeviceInvalid")
-        : code.includes("audio_voice_engine_active") ? t("audio.voiceEngineActive")
-        : code.includes("audio_voice_device_is_preview") ? t("audio.voiceDeviceInvalid")
-        : code.includes("audio_voice_device_missing") ? t("audio.chooseVoiceDevice")
-        : code.includes("audio_voice_device_locked") ? t("audio.voiceDeviceLocked")
-        : code.includes("audio_voice_output_failed") ? t("audio.microphoneBridgeFailed")
-        : code.includes("audio_music_capacity_reached") ? t("audio.playbackCapacity")
-        : code.includes("audio_playback_cancelled") ? t("audio.playbackCancelled")
-        : code.includes("audio_relink_conflict") || code.includes("audio_relink_shared_asset") ? t("audio.relinkConflict")
-        : code.includes("audio_relink_outside_source") ? t("audio.relinkOutsideSource")
-        : code.includes("audio_relink_kind_mismatch") ? t("audio.relinkKindMismatch")
-        : code.includes("audio_export_exists") ? t("audio.exportExists")
-        : code.includes("audio_tools_missing") ? t("audio.toolsMissing")
-        : t("audio.operationFailed"));
+      } else setError(errorWithTitle(cause, code.includes("audio_number_taken") ? "audio.numberTaken"
+        : code.includes("audio_clip_invalid") ? "audio.clipInvalid"
+        : code.includes("audio_preview_device_is_") ? "audio.previewDeviceInvalid"
+        : code.includes("audio_voice_engine_active") ? "audio.voiceEngineActive"
+        : code.includes("audio_voice_device_is_preview") ? "audio.voiceDeviceInvalid"
+        : code.includes("audio_voice_device_missing") ? "audio.chooseVoiceDevice"
+        : code.includes("audio_voice_device_locked") ? "audio.voiceDeviceLocked"
+        : code.includes("audio_voice_output_failed") ? "audio.microphoneBridgeFailed"
+        : code.includes("audio_music_capacity_reached") ? "audio.playbackCapacity"
+        : code.includes("audio_playback_cancelled") ? "audio.playbackCancelled"
+        : code.includes("audio_relink_conflict") || code.includes("audio_relink_shared_asset") ? "audio.relinkConflict"
+        : code.includes("audio_relink_outside_source") ? "audio.relinkOutsideSource"
+        : code.includes("audio_relink_kind_mismatch") ? "audio.relinkKindMismatch"
+        : code.includes("audio_export_exists") ? "audio.exportExists"
+        : code.includes("audio_tools_missing") ? "audio.toolsMissing"
+        : "audio.operationFailed", "other"));
     } finally {
       setBusy(false);
     }
@@ -306,13 +308,13 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
 
   const seekVoice = (instanceId: number | null, seconds: number) => {
     void invoke<VoicePlaybackStatus>("audio_voice_seek", { instanceId, seconds })
-      .then(setVoice).catch((cause) => setError(String(cause).includes("audio_playback_cancelled")
-        ? t("audio.playbackCancelled") : t("audio.operationFailed")));
+      .then(setVoice).catch((cause) => setError(errorWithTitle(cause, String(cause).includes("audio_playback_cancelled")
+        ? "audio.playbackCancelled" : "audio.operationFailed", "other")));
   };
 
   const changeVolume = (command: string, args?: Record<string, unknown>) => {
     void invoke<AudioVolumeStatus>(command, args).then(setVolume)
-      .catch(() => setError(t("audio.operationFailed")));
+      .catch((cause) => setError(errorWithTitle(cause, "audio.operationFailed", "other")));
   };
 
   const pick = (kind: "file" | "directory") => {
@@ -485,7 +487,7 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
           <Btn onClick={() => pick("directory")} disabled={busy}>{t("audio.importFolders")}</Btn>
         </>
       } />
-      {error ? <p role="alert" className="flex-none text-[13px] text-[var(--danger-text)] mt-4 mb-0">{error}</p> : null}
+      {error ? diagnosticOf(error) ? <ErrorNote text={error} feature="other" /> : <p role="alert" className="flex-none text-[13px] text-[var(--danger-text)] mt-4 mb-0">{error}</p> : null}
       {notice ? <p role="status" className="flex-none text-[13px] text-[var(--meta)] mt-4 mb-0">{notice}</p> : null}
       {scanActive ? <div className="flex-none flex items-center gap-3 mt-4 text-[12.5px] text-[var(--meta)]" role="status">
         <span>{t("audio.scanProgress", { count: scanned })}</span>
@@ -612,13 +614,13 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
               <div className="flex items-end gap-2 flex-wrap">
                 <label className="text-[12.5px] text-[var(--meta)]">{t("audio.localOutput")}
                   <Select value={deviceId} options={[{ id: "", label: t("audio.chooseDevice") }, ...devices.map((device) => ({ id: device.id, label: device.name }))]}
-                    onChange={(id) => { setDeviceId(id); void invoke("config_set", { patch: { audio_preview_device_id: id } }).catch(() => setError(t("audio.operationFailed"))); }} width={200} />
+                    onChange={(id) => { setDeviceId(id); void invoke("config_set", { patch: { audio_preview_device_id: id } }).catch((cause) => setError(errorWithTitle(cause, "audio.operationFailed", "settings"))); }} width={200} />
                 </label>
                 <Btn disabled={busy || !deviceId || unplayable(selectedAsset)} onClick={startPreview}>{t("audio.preview")}</Btn>
-                <Btn disabled={!preview || (preview.state !== "playing" && preview.state !== "paused")} onClick={() => void invoke<PreviewStatus>("audio_preview_pause", { paused: preview?.state !== "paused" }).then(setPreview).catch(() => setError(t("audio.operationFailed")))}>
+                <Btn disabled={!preview || (preview.state !== "playing" && preview.state !== "paused")} onClick={() => void invoke<PreviewStatus>("audio_preview_pause", { paused: preview?.state !== "paused" }).then(setPreview).catch((cause) => setError(errorWithTitle(cause, "audio.operationFailed", "other")))}>
                   {preview?.state === "paused" ? t("audio.resume") : t("audio.pause")}
                 </Btn>
-                <Btn disabled={!preview || (preview.state !== "playing" && preview.state !== "paused")} onClick={() => void invoke<PreviewStatus>("audio_preview_stop").then(setPreview).catch(() => setError(t("audio.operationFailed")))}>{t("audio.stop")}</Btn>
+                <Btn disabled={!preview || (preview.state !== "playing" && preview.state !== "paused")} onClick={() => void invoke<PreviewStatus>("audio_preview_stop").then(setPreview).catch((cause) => setError(errorWithTitle(cause, "audio.operationFailed", "other")))}>{t("audio.stop")}</Btn>
               </div>
               {preview && preview.state !== "idle" ? <div className="text-[12.5px] text-[var(--meta)]">
                 {preview.state === "error" ? <p role="alert" className="m-0">{t("neptune.previewFailed")}</p> : null}
@@ -668,17 +670,17 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
             </span>
             <Btn onClick={() => void invoke<VoicePlaybackStatus>("audio_voice_pause", {
               paused: instance.state !== "paused", instanceId: instance.instance_id,
-            }).catch(() => setError(t("audio.operationFailed")))}>{t(instance.state === "paused" ? "audio.resume" : "audio.pause")}</Btn>
+            }).catch((cause) => setError(errorWithTitle(cause, "audio.operationFailed", "other")))}>{t(instance.state === "paused" ? "audio.resume" : "audio.pause")}</Btn>
             <Btn onClick={() => void invoke<VoicePlaybackStatus>("audio_voice_replay", {
               instanceId: instance.instance_id,
-            }).then(setVoice).catch((cause) => setError(String(cause).includes("audio_playback_cancelled")
-              ? t("audio.playbackCancelled") : t("audio.operationFailed")))}>{t("audio.replay")}</Btn>
+            }).then(setVoice).catch((cause) => setError(errorWithTitle(cause, String(cause).includes("audio_playback_cancelled")
+              ? "audio.playbackCancelled" : "audio.operationFailed", "other")))}>{t("audio.replay")}</Btn>
             <Btn on={instance.looping} onClick={() => void invoke<VoicePlaybackStatus>("audio_voice_loop", {
               instanceId: instance.instance_id, looping: !instance.looping,
-            }).then(setVoice).catch(() => setError(t("audio.operationFailed")))}>{t("audio.loop")}</Btn>
+            }).then(setVoice).catch((cause) => setError(errorWithTitle(cause, "audio.operationFailed", "other")))}>{t("audio.loop")}</Btn>
             <Btn onClick={() => void invoke<VoicePlaybackStatus>("audio_voice_stop_instance", {
               instanceId: instance.instance_id,
-            }).then(setVoice).catch(() => setError(t("audio.operationFailed")))}>{t("audio.stop")}</Btn>
+            }).then(setVoice).catch((cause) => setError(errorWithTitle(cause, "audio.operationFailed", "other")))}>{t("audio.stop")}</Btn>
           </div>)}
         </div> : null}
         <div className="flex-none flex items-center gap-x-4 gap-y-2 flex-wrap">
@@ -702,14 +704,14 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
             look="compact"
             checked={monitor}
             onChange={(enabled) => { void invoke<boolean>("audio_voice_monitor_set", { enabled })
-              .then(setMonitor).catch(() => setError(t("audio.operationFailed"))); }}
+              .then(setMonitor).catch((cause) => setError(errorWithTitle(cause, "audio.operationFailed", "other"))); }}
             label={t("audio.monitorMusic")}
           />
           <span className="ml-auto">
             <Btn disabled={voiceInstances.length === 0 && !voicePreparing} onClick={() => void invoke<VoicePlaybackStatus>("audio_voice_stop").then((status) => {
               setVoice(status);
               setVoiceInstances([]);
-            }).catch(() => setError(t("audio.operationFailed")))}>{t("audio.stopAll")}</Btn>
+            }).catch((cause) => setError(errorWithTitle(cause, "audio.operationFailed", "other")))}>{t("audio.stopAll")}</Btn>
           </span>
         </div>
         {voice?.state === "error" ? <p role="alert" className="flex-none text-[12.5px] text-[var(--danger-text)] mt-2 mb-0">{t("audio.voicePlaybackFailed")}</p> : null}

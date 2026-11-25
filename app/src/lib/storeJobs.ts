@@ -1,3 +1,4 @@
+import { errorWithTitle } from "./diagnostics";
 /**
  * Plaza voice downloads live here, not in StoreSection.
  *
@@ -6,7 +7,7 @@
  * job until it finishes or the user cancels.
  */
 import { useEffect, useState } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { listen } from "./listen";
 import { displayVoiceName } from "./voiceDisplay";
 import {
   cancelStoreDownload,
@@ -139,7 +140,7 @@ async function startOne(id: string) {
     lastCompleted = id;
     lastCompletedThird = job.kind === "pack" && job.voice.official === false;
   } catch (e) {
-    error = `${label || id}：${String(e)}`;
+    error = errorWithTitle(e, "store.downloadFailedNamed", "store", { name: label || id });
   } finally {
     running = running.filter((x) => x !== id);
     if (id in prog) {

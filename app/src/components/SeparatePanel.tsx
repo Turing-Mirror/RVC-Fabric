@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { invoke } from "../lib/invoke";
+import { listen } from "../lib/listen";
 import { dropListen } from "../lib/tauriListen";
 import { Btn, HelpMark } from "./ui";
 import { ErrorNote } from "./ErrorNote";
@@ -241,13 +241,13 @@ export function SeparatePanel() {
               />
             </div>
             <p className="m-0 mt-2 text-[12.5px] text-[var(--meta)]">
-              {prog.message} {prog.phase === "run" ? `${pct}%` : ""}
+              {prog.phase === "error" ? "" : prog.message} {prog.phase === "run" ? `${pct}%` : ""}
             </p>
           </div>
         ) : null}
 
         {msg ? (
-          <ErrorNote text={msg} error={msgErr} />
+          <ErrorNote feature="separation" text={msg} error={msgErr} />
         ) : null}
 
         <ToolActions>

@@ -188,7 +188,7 @@ fn wait_retry(cancel: &AtomicBool) -> Result<(), String> {
 /// 很确定却指错方向的话。
 pub fn explain_error(raw: &str) -> Option<&'static str> {
     let e = raw.to_ascii_lowercase();
-    if e.contains("sha256") {
+    if e.contains("sha256") || e.contains("signature") {
         // 校验不过：下完了但内容不对。跟网断了是两码事，不能都说「网络问题」。
         return Some("s.dlWhyHash");
     }
@@ -208,10 +208,16 @@ pub fn explain_error(raw: &str) -> Option<&'static str> {
     if e.contains("status 429") || e.contains("too many requests") {
         return Some("s.dlWhyBusy");
     }
-    if e.contains("status 40") || e.contains("status 41") || e.contains("forbidden") {
+    // 各处报状态码的写法不一：ripget 是「status 404」，reqwest 是「HTTP 404」，
+    // 程序更新器是「status: 404」。
+    if e.contains("status 40") || e.contains("status 41") || e.contains("forbidden")
+        || e.contains("http 40") || e.contains("http 41") || e.contains("status: 4")
+    {
         return Some("s.dlWhyRefused");
     }
-    if e.contains("status 5") || e.contains("bad gateway") || e.contains("service unavailable") {
+    if e.contains("status 5") || e.contains("bad gateway") || e.contains("service unavailable")
+        || e.contains("http 5") || e.contains("status: 5")
+    {
         return Some("s.dlWhyServer");
     }
     if e.contains("timed out") || e.contains("timeout") || e.contains("10060") {
@@ -224,6 +230,21 @@ pub fn explain_error(raw: &str) -> Option<&'static str> {
         return Some("s.dlWhyUnreachable");
     }
     None
+}
+
+/// 联网请求失败时给用户看的话：原因，加上该怎么做。原始报错只写进日志，
+/// 反馈时从日志里取，不在界面上铺一串地址。
+pub(crate) fn plain_error(raw: &str) -> String {
+    crate::logging::shell_log!(format!("network request failed: {raw}"));
+    let Some(key) = explain_error(raw) else {
+        return crate::i18n::t("s.netUnknown");
+    };
+    let action = match key {
+        "s.dlWhyTimeout" | "s.dlWhyDns" | "s.dlWhyTls" | "s.dlWhyReset" => "s.netCheckNetwork",
+        "s.dlWhyHash" | "s.dlWhyPerm" => "s.netRetryOrManual",
+        _ => return crate::i18n::t(key),
+    };
+    crate::i18n::t2("s.netWithAction", &crate::i18n::t(key), &crate::i18n::t(action))
 }
 
 /// 报错的完整形状：一句人话 → 试过哪些源 → 能自己做点什么 → 技术细节。
@@ -1040,6 +1061,19 @@ async fn wait_first_byte_or_timeout(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn plain_error_hides_the_raw_request() {
+        let raw = "https://cnb.cool/a/index.json?_=1: error sending request for url (https://cnb.cool/a/index.json?_=1)";
+        let msg = plain_error(raw);
+        assert!(!msg.contains("cnb.cool"));
+        assert!(!msg.is_empty());
+        assert_eq!(explain_error("x: HTTP 404 Not Found"), Some("s.dlWhyRefused"));
+        assert_eq!(explain_error("Download request failed with status: 503"), Some("s.dlWhyServer"));
+        assert_eq!(explain_error("signature verification failed"), Some("s.dlWhyHash"));
+        let unknown = plain_error("something odd");
+        assert!(!unknown.contains("something odd"));
+    }
 
     fn mirror_fixture(
         responses: Vec<(&'static str, String, Duration)>,

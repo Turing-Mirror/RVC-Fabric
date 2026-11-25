@@ -446,7 +446,7 @@ fn fetch_first_json(
 
 pub(crate) fn fetch_release_feed(file: &str, timeout_secs: u64) -> Result<Value, String> {
     fetch_first_json(&release_feed_urls(file), |url| {
-        crate::catalog::http_get_json(url, timeout_secs)
+        crate::catalog::get_json_retry(url, timeout_secs, false)
     })
 }
 

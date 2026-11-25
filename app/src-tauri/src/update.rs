@@ -207,7 +207,8 @@ fn decide(cat: &Value, local: &str, exe_version: &str) -> Value {
 
 /// Check the release website for a newer build.
 pub fn check(timeout_secs: u64) -> Result<Value, String> {
-    let cat = crate::plaza::fetch_release_feed("app.json", timeout_secs)?;
+    let cat = crate::plaza::fetch_release_feed("app.json", timeout_secs)
+        .map_err(|e| crate::download::plain_error(&e))?;
     Ok(decide(&cat, &effective_version(), APP_VERSION))
 }
 
@@ -473,7 +474,11 @@ pub async fn run_app_updater(app: &tauri::AppHandle) -> Result<Value, String> {
     let updater = app
         .updater()
         .map_err(|_| crate::i18n::t("s.6a3b354477"))?;
-    let Some(update) = updater.check().await.map_err(|e| e.to_string())? else {
+    let Some(update) = updater
+        .check()
+        .await
+        .map_err(|e| crate::download::plain_error(&e.to_string()))?
+    else {
         return Ok(json!({"available": false, "local": APP_VERSION}));
     };
     let version = update.version.clone();
@@ -491,7 +496,7 @@ pub async fn run_app_updater(app: &tauri::AppHandle) -> Result<Value, String> {
         }
     }
     if !installed {
-        return Err(crate::i18n::te("s.90d174c86a", &errors.join("; ")));
+        return Err(crate::download::plain_error(&errors.join("; ")));
     }
     Ok(json!({
         "available": true,

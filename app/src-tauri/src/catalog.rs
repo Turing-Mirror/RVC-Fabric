@@ -151,6 +151,11 @@ fn http_get_json_ex(url: &str, timeout_secs: u64, no_cache: bool) -> Result<Valu
     serde_json::from_str(&text).map_err(|e| format!("JSON {url}: {e}"))
 }
 
+/// `http_get_json_ex` 的报错里，只有请求没发出去或没收到回应时才不带 `HTTP ` 和 `JSON `。
+fn is_transport_error(e: &str) -> bool {
+    !e.contains(": HTTP ") && !e.starts_with("JSON ")
+}
+
 /// 给 URL 加时间戳，避免 CDN 把 `index.json` 钉死在旧版本。
 fn with_cache_bust(url: &str) -> String {
     let sep = if url.contains('?') { '&' } else { '?' };
@@ -159,6 +164,22 @@ fn with_cache_bust(url: &str) -> String {
         .map(|d| d.as_millis())
         .unwrap_or(0);
     format!("{url}{sep}_={ms}")
+}
+
+/// 连接层的失败（断线、握手超时）多是一时抖动，同一地址再试一次；
+/// 服务器已经回了状态码或内容解析不了的，不再重试。
+pub(crate) fn get_json_retry(url: &str, timeout_secs: u64, no_cache: bool) -> Result<Value, String> {
+    let fetch = || {
+        let u = if no_cache { with_cache_bust(url) } else { url.to_string() };
+        http_get_json_ex(&u, timeout_secs, no_cache)
+    };
+    match fetch() {
+        Err(e) if is_transport_error(&e) => {
+            std::thread::sleep(Duration::from_millis(800));
+            fetch()
+        }
+        other => other,
+    }
 }
 
 /// Short-lived memo of the remote catalog.
@@ -192,8 +213,7 @@ pub fn fetch_remote_catalog_cached(timeout_secs: u64) -> Result<Value, String> {
 pub fn fetch_remote_catalog(timeout_secs: u64) -> Result<Value, String> {
     let mut errors = Vec::new();
     for url in MANIFEST_URLS {
-        let u = with_cache_bust(url);
-        match http_get_json_ex(&u, timeout_secs, true) {
+        match get_json_retry(url, timeout_secs, true) {
             Ok(v) if v.is_object() => {
                 #[cfg(test)]
                 crate::logging::shell_log!(format!("catalog source {url}"));
@@ -205,7 +225,7 @@ pub fn fetch_remote_catalog(timeout_secs: u64) -> Result<Value, String> {
             Err(e) => errors.push(e),
         }
     }
-    Err(crate::i18n::te("s.af72a27185", &errors.into_iter().take(3).collect::<Vec<_>>().join(" | ")))
+    Err(crate::download::plain_error(&errors.join(" | ")))
 }
 
 /// Preserve catalog priority and append built-in addresses only as fallbacks.
@@ -579,6 +599,13 @@ mod tests {
             missing_fallback["runtimes"]["nvidia"]["parts"][0]["urls"] = serde_json::json!([mirror, cdn]);
             assert_eq!(parse_spec("nvidia", &missing_fallback).part.urls, part.urls);
         }
+    }
+
+    #[test]
+    fn only_transport_failures_are_retried() {
+        assert!(is_transport_error("https://x/index.json: error sending request for url"));
+        assert!(!is_transport_error("https://x/index.json: HTTP 404 Not Found"));
+        assert!(!is_transport_error("JSON https://x/index.json: expected value"));
     }
 
     #[test]

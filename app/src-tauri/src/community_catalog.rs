@@ -362,6 +362,16 @@ fn package_entry(asset: &Value, version: &Value, package: &Value, api: &Url) -> 
             entry[to] = meta[from].clone();
         }
     }
+    // Other translations of the same names: language → names for a voice, a plain list for series.
+    for (from, to) in [
+        ("nameAliases", "name_aliases"),
+        ("seriesAliases", "series_aliases"),
+        ("groupAliases", "group_aliases"),
+    ] {
+        if meta[from].is_object() || meta[from].is_array() {
+            entry[to] = meta[from].clone();
+        }
+    }
     Some(entry)
 }
 

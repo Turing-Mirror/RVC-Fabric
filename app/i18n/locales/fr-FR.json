@@ -240,7 +240,8 @@
     "allSeries": "Toutes les séries",
     "searchHint": "Rechercher voix / séries / clubs / auteurs…",
     "confirmInstall": "Confirmer l'installation",
-    "downloadFailedNamed": "Le téléchargement de « {name} » a échoué."
+    "downloadFailedNamed": "Le téléchargement de « {name} » a échoué.",
+    "otherNames": "Autres noms : {v0}"
   },
   "dock": {
     "noVoice": "Aucune voix sélectionnée",
@@ -2538,6 +2539,11 @@
     "noFiles": "Aucun fichier ZIP correspondant.",
     "next": "Suivant",
     "name": "Nom de la voix",
+    "names": "Noms par langue",
+    "namesNote": "Le premier nom de chaque langue s'affiche sur les cartes. Tous les noms peuvent être recherchés.",
+    "otherNames": "Autres noms",
+    "addName": "Ajouter",
+    "removeName": "Retirer",
     "description": "Description",
     "author": "Auteur d’origine",
     "publisherRole": "Publier en tant que",

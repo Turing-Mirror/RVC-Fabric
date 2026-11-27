@@ -683,7 +683,8 @@ pub fn resolve_covers(root: &Path, urls: &[String]) -> Map<String, Value> {
     let next = AtomicUsize::new(0);
     // 连接复用：每个 URL 各建一个 Client 等于每张封面都重握手一次。
     let client = match reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(8))
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(30))
         .build()
     {
         Ok(c) => Some(c),
@@ -748,7 +749,8 @@ fn resolve_cover_url(
                 (Some(c), _) => c,
                 (None, true) => {
                     owned = reqwest::blocking::Client::builder()
-                        .timeout(std::time::Duration::from_secs(8))
+                        .connect_timeout(std::time::Duration::from_secs(10))
+                        .timeout(std::time::Duration::from_secs(30))
                         .build()
                         .ok();
                     match &owned {

@@ -21,6 +21,7 @@ import {
   type Submission,
 } from "../lib/communityPublication";
 import { CatalogTransition } from "./CatalogTransition";
+import { NamesEditor, namesFromMetadata } from "./NamesEditor";
 import { CommunityCategories } from "./CommunityCategories";
 import { CommunityCover } from "./CommunityCover";
 import { Pager } from "./Pager";
@@ -252,6 +253,9 @@ export function CommunityPublisher({ initial, auth, onBack, onSave, onSubmitted,
           <div className="grid items-start gap-6 pb-4 md:grid-cols-[2fr_1fr]">
             <div className="space-y-4">
               <TextField label={t("publication.name")} value={draft.title} limit={200} onChange={(title) => update({ title })} />
+              <NamesEditor withLanguage label={t("publication.names")} note={t("publication.namesNote")}
+                entries={draft.names ?? namesFromMetadata(draft.modelMetadata?.nameI18n, draft.modelMetadata?.nameAliases)}
+                onChange={(names) => update({ names })} />
               <TextField label={t("publication.description")} value={draft.description} limit={20000} multiline onChange={(description) => update({ description })} />
               <div className="grid gap-4 sm:grid-cols-2">
                 <TextField label={t("publication.author")} value={draft.originalAuthor} limit={200} onChange={(originalAuthor) => update({ originalAuthor })} />

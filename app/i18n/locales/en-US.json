@@ -240,7 +240,8 @@
     "allSeries": "All series",
     "searchHint": "Search voices / series / clubs / authors…",
     "confirmInstall": "Confirm install",
-    "downloadFailedNamed": "“{name}” could not be downloaded."
+    "downloadFailedNamed": "“{name}” could not be downloaded.",
+    "otherNames": "Other names: {v0}"
   },
   "dock": {
     "noVoice": "No voice selected",
@@ -2538,6 +2539,11 @@
     "noFiles": "No matching ZIP files.",
     "next": "Next",
     "name": "Voice name",
+    "names": "Names by language",
+    "namesNote": "The first name for each language appears on cards. All names are searchable.",
+    "otherNames": "Other names",
+    "addName": "Add",
+    "removeName": "Remove",
     "description": "Description",
     "author": "Original author",
     "publisherRole": "Publishing as",

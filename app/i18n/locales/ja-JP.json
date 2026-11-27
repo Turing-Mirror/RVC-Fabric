@@ -240,7 +240,8 @@
     "allSeries": "すべてのシリーズ",
     "searchHint": "音色・シリーズ・部活・作者で検索…",
     "confirmInstall": "インストールを確認",
-    "downloadFailedNamed": "「{name}」のダウンロードに失敗しました。"
+    "downloadFailedNamed": "「{name}」のダウンロードに失敗しました。",
+    "otherNames": "その他の名前：{v0}"
   },
   "dock": {
     "noVoice": "音声未選択",
@@ -2538,6 +2539,11 @@
     "noFiles": "一致するZIPファイルがありません。",
     "next": "次へ",
     "name": "音色名",
+    "names": "言語ごとの名前",
+    "namesNote": "各言語の最初の名前がカードに表示されます。すべての名前で検索できます。",
+    "otherNames": "その他の名前",
+    "addName": "追加",
+    "removeName": "削除",
     "description": "説明",
     "author": "原作者",
     "publisherRole": "投稿者の立場",

@@ -240,7 +240,8 @@
     "allSeries": "全部系列",
     "searchHint": "搜尋音色 / 系列 / 社團 / 作者…",
     "confirmInstall": "確認安裝",
-    "downloadFailedNamed": "「{name}」下載失敗。"
+    "downloadFailedNamed": "「{name}」下載失敗。",
+    "otherNames": "其他名稱：{v0}"
   },
   "dock": {
     "noVoice": "未選擇音色",
@@ -2538,6 +2539,11 @@
     "noFiles": "沒有符合條件的 ZIP 檔案。",
     "next": "下一步",
     "name": "音色名稱",
+    "names": "各語言名稱",
+    "namesNote": "每種語言的第一個名稱顯示在卡片上，所有名稱均可搜尋。",
+    "otherNames": "其他名稱",
+    "addName": "新增",
+    "removeName": "移除",
     "description": "簡介",
     "author": "原作者",
     "publisherRole": "發布身分",

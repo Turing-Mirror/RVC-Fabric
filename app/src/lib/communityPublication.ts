@@ -25,7 +25,8 @@ export type ReviewState = "pending" | "published" | "rejected" | "withdrawn";
 export const PUBLICATION_PAGE_SIZE = 16;
 export const AUTHOR_URL_LABEL_LIMIT = 80;
 export type Category = { id: string; name: string; names: Record<string, string>; aliases: string[] };
-export type CategoryChoice = { id: string } | { name: string; locale: string; translations?: Record<string, string> };
+/** `aliases`: other names of the category the publisher adds; they coexist with its per-language names. */
+export type CategoryChoice = ({ id: string } | { name: string; locale: string; translations?: Record<string, string> }) & { aliases?: string[] };
 export type CategorySelection = { series: CategoryChoice; department?: CategoryChoice };
 export const categoryTerm = (label: string) => label.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
 
@@ -39,6 +40,8 @@ export type ModelMetadata = {
   groupId?: string;
   language?: string;
   nameI18n?: Record<string, string>;
+  /** Other translations of the name per language; they coexist with nameI18n. */
+  nameAliases?: Record<string, string[]>;
   seriesI18n?: Record<string, string>;
   groupI18n?: Record<string, string>;
 };
@@ -146,6 +149,8 @@ export type Draft = {
   assetId?: string;
   language?: string;
   modelMetadata?: ModelMetadata;
+  /** Names per language; the first of each language is shown on cards. Undefined keeps modelMetadata's. */
+  names?: NameEntry[];
   coverUploadId?: string;
   currentVersion?: VersionContext;
   metadataVersionId?: string;
@@ -316,7 +321,8 @@ export async function prepareSubmission(draft: Draft, account: string, send = pu
       upstreamUrl: selection?.canonicalUrl || draft.url.trim(),
       license: draft.license,
       metadata: {
-        nameI18n: draft.modelMetadata?.nameI18n,
+        ...(draft.names ? namesToMetadata(draft.names)
+          : { nameI18n: draft.modelMetadata?.nameI18n, nameAliases: draft.modelMetadata?.nameAliases }),
         seriesI18n: draft.series.trim() === draft.modelMetadata?.series ? draft.modelMetadata?.seriesI18n : undefined,
         groupI18n: draft.group.trim() === draft.modelMetadata?.group ? draft.modelMetadata?.groupI18n : undefined,
         family: "rvc",
@@ -351,4 +357,30 @@ export function publicationError(error: unknown, action: "resolve" | "submit" | 
   if (code === "rate_limited") return text(action === "resolve" ? "publication.rateLimited" : "publication.retryQueued");
   if (action === "resolve" && (code === "auth_required" || code === "unsupported" || code === "not_found")) return text("publication.publicSource");
   return text("publication.requestFailed");
+}
+
+export const NAME_LOCALES = ["zh-CN", "zh-TW", "ja-JP", "en-US", "ko-KR", "es-ES", "fr-FR", "ru-RU"];
+export type NameEntry = { locale?: string; name: string };
+
+/** nameI18n + nameAliases → editor rows: the primary name of a language first. */
+export function namesFromMetadata(primary?: Record<string, string>, aliases?: Record<string, string[]>): NameEntry[] {
+  return NAME_LOCALES.flatMap((id) => [
+    ...(primary?.[id] ? [{ locale: id, name: primary[id] }] : []),
+    ...(aliases?.[id] ?? []).map((name) => ({ locale: id, name })),
+  ]);
+}
+
+/** Editor rows → nameI18n (first name per language) and nameAliases (the rest). */
+export function namesToMetadata(entries: NameEntry[]) {
+  const nameI18n: Record<string, string> = {};
+  const nameAliases: Record<string, string[]> = {};
+  for (const entry of entries) {
+    if (!entry.locale) continue;
+    if (!nameI18n[entry.locale]) nameI18n[entry.locale] = entry.name;
+    else (nameAliases[entry.locale] ??= []).push(entry.name);
+  }
+  return {
+    nameI18n: Object.keys(nameI18n).length ? nameI18n : undefined,
+    nameAliases: Object.keys(nameAliases).length ? nameAliases : undefined,
+  };
 }

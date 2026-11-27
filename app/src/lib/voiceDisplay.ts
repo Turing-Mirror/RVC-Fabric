@@ -195,7 +195,11 @@ function localizedFieldValues(v: NamedVoice, field: string): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
   const add = (value: unknown) => {
-    if (typeof value === "object" && value && !Array.isArray(value)) {
+    if (Array.isArray(value)) {
+      for (const nested of value) add(nested);
+      return;
+    }
+    if (typeof value === "object" && value) {
       for (const nested of Object.values(value)) add(nested);
       return;
     }
@@ -206,6 +210,8 @@ function localizedFieldValues(v: NamedVoice, field: string): string[] {
     }
   };
   add(v[field]);
+  // Other translations of the same name (`name_aliases`: language → names); they coexist with the primary one.
+  add(v[`${field}_aliases`]);
   const map = v[`${field}_i18n`];
   if (map && typeof map === "object" && !Array.isArray(map)) {
     for (const value of Object.values(map)) add(value);
@@ -511,4 +517,12 @@ export function voiceSearchText(v: NamedVoice): string {
   ]
     .filter(Boolean)
     .join(" ");
+}
+
+/**
+ * Every other name of this voice in any language: other translations and the names
+ * in other languages that the title does not already show. 阿洛娜 and 彩奈 for 阿罗娜.
+ */
+export function voiceOtherNames(v: NamedVoice, title: string): string[] {
+  return localizedFieldValues(v, "name").filter((name) => !title.includes(name));
 }

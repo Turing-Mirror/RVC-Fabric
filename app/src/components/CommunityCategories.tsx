@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useI18n as useUiI18n, Btn, Collapse, Field, Group, SearchBox, Select, TextInput, usePaneOn } from "trm-ui";
 import { useI18n } from "../i18n";
+import { NamesEditor } from "./NamesEditor";
 import { categoryTerm, publication, type Category, type CategoryChoice, type CategorySelection } from "../lib/communityPublication";
 
 const locales = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "es-ES", "fr-FR", "ru-RU"];
@@ -105,6 +106,9 @@ function CategoryField({ label, choice, initial, list, onChange, disabled }: {
             </div>
           </Group> : <p className="m-0 text-[12.5px] text-[var(--help)]" role="status">{t("s.f950213ab7")}</p>}
         </Collapse>
+        {choice && <NamesEditor label={t("publication.otherNames")} disabled={disabled}
+          entries={(choice.aliases ?? []).map((name) => ({ name }))}
+          onChange={(entries) => onChange({ ...choice, aliases: entries.length ? entries.map((entry) => entry.name) : undefined })} />}
         {allowTranslations && proposed && <div className="space-y-2">
           <p className="m-0 text-[12.5px] text-[var(--help)]">{t("publication.categoryUnderReview")}</p>
           <div className="grid gap-2 sm:grid-cols-2">

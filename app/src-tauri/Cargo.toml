@@ -1,6 +1,6 @@
 [package]
 name = "rvc-fabric"
-version = "1.8.3"
+version = "1.8.4"
 description = "RVC Fabric desktop shell (Tauri + React)"
 authors = ["Turing Mirror"]
 edition = "2021"
@@ -24,8 +24,7 @@ name = "catalog-check"
 path = "src/bin/catalog-check.rs"
 
 [dependencies]
-# Before release, replace this local path with the verified fabric-diagnostics git rev.
-fabric-diagnostics = { path = "../../../fabric-diagnostics" }
+fabric-diagnostics = { git = "https://github.com/Turing-Mirror/fabric-diagnostics.git", rev = "f8cf0368161d31a993c4c64b81dce312f21708de" }
 trm-app-protocol = { git = "https://github.com/Turing-Mirror/trm-app-protocol.git", rev = "f02269b436215a04980b0b450edf7764a5d79493" }
 fabric-audio = { path = "../audio-core" }
 rtrb = "=0.4.0"

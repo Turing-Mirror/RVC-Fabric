@@ -1761,6 +1761,7 @@ dependencies = [
 [[package]]
 name = "fabric-diagnostics"
 version = "0.1.0"
+source = "git+https://github.com/Turing-Mirror/fabric-diagnostics.git?rev=f8cf0368161d31a993c4c64b81dce312f21708de#f8cf0368161d31a993c4c64b81dce312f21708de"
 dependencies = [
  "serde",
  "serde_json",
@@ -4862,7 +4863,7 @@ checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
 
 [[package]]
 name = "rvc-fabric"
-version = "1.8.3"
+version = "1.8.4"
 dependencies = [
  "axum",
  "chrono",

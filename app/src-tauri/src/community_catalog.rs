@@ -82,18 +82,27 @@ pub(crate) fn publication_base() -> ApiResult<Url> {
 
 fn client() -> Result<Client, String> {
     Client::builder()
-        .timeout(Duration::from_secs(8))
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(45))
         .redirect(reqwest::redirect::Policy::none())
         .build()
         .map_err(|e| e.to_string())
 }
 
+/// 社区服务要几秒才开始回应，慢网络下读到一半可能断开；连接或读取出错时再试一次，
+/// 服务明确拒绝（HTTP 状态码）时不重试。
 fn request(client: &Client, url: Url) -> Result<Value, String> {
-    let response = client.get(url).send().map_err(|e| e.to_string())?;
-    if !response.status().is_success() {
-        return Err(format!("Community returned HTTP {}", response.status()));
-    }
-    let body = response.text().map_err(|e| e.to_string())?;
+    let once = || -> Result<String, String> {
+        let response = client.get(url.clone()).send().map_err(|e| e.to_string())?;
+        if !response.status().is_success() {
+            return Err(format!("Community returned HTTP {}", response.status()));
+        }
+        response.text().map_err(|e| e.to_string())
+    };
+    let body = match once() {
+        Err(e) if !e.starts_with("Community returned HTTP") => once(),
+        other => other,
+    }?;
     serde_json::from_str(&body).map_err(|e| e.to_string())
 }
 
